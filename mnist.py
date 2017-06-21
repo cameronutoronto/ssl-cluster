@@ -169,9 +169,9 @@ for idx in tqdm(xrange(FLAGS.max_train_iters)):
     #loss
     pt_F = F.data
     pt_H = H
-    C = torch.mm(pt_H, inverse(pt_H))
-    loss = torch.trace( torch.mm(C, torch.mm(pt_F, inverse(pt_F)).t() ))
-
+    # C = torch.mm(pt_H, inverse(pt_H))
+    # loss = torch.trace( torch.mm(C, torch.mm(pt_F, inverse(pt_F)).t() ))
+    loss = torch.dot(torch.mm(inverse(pt_H),pt_F),torch.mm(inverse(pt_F), pt_H).t())
     
     ## checking this way of computing accuracy is correct
     ## works
@@ -179,12 +179,12 @@ for idx in tqdm(xrange(FLAGS.max_train_iters)):
     # doesn't work
     # val_pred = get_pred(model, X_batch,Y[torch.LongTensor(idxs)] , X[torch.LongTensor(np.arange(FLAGS.batch_size))].data.numpy(), Y[torch.LongTensor(np.arange(FLAGS.batch_size))].numpy())
     # doesn't work
-    val_pred = get_pred(model, support_X,support_Y , X_batch.data.numpy(), Y_batch.numpy())
+    # val_pred = get_pred(model, support_X,support_Y , X_batch.data.numpy(), Y_batch.numpy())
     # doesn't work
     # val_pred = get_pred(model, X[torch.LongTensor(np.arange(FLAGS.batch_size))],Y[torch.LongTensor(np.arange(FLAGS.batch_size))] , X_batch.data.numpy(), Y_batch.numpy())
-    train_accuracy = np.mean(train_gt == val_pred)
+    # train_accuracy = np.mean(train_gt == val_pred)
     # print ('train')
-    print (train_accuracy)
+    # print (train_accuracy)
     # summarize
     acc= sess.run(tf_acc, feed_dict={ph_accuracy:train_accuracy})
     loss = sess.run(tf_loss, feed_dict={ph_loss:loss})

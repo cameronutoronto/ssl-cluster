@@ -18,3 +18,5 @@ class MiniBatcher(object):
 		ret = self.idxs[self.curr_idx:self.curr_idx+self.batch_size]
 		self.curr_idx+=self.batch_size
 		return ret
+
+

@@ -3,6 +3,8 @@
 *.png
 *.p
 *.pkl
+*.tfevents.*
+
 
 
 # Byte-compiled / optimized / DLL files

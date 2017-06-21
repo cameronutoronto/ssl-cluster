@@ -28,11 +28,11 @@ def solve_H(H_init, U ,dist,Y=None,iters=100, thresh=0.001):
     H = H_init
     # make sure initial H satisfies Y
     for example_idx in xrange(U.size()[0]):
-    	if Y is not None:
-    		curr_y = Y[example_idx]
-    		if curr_y.sum() == 1: #labelled-example
-    			H[example_idx] *=0
-    			H[example_idx, curr_y.argmax()] = 1
+        if Y is not None:
+            curr_y = Y[example_idx]
+            if curr_y.sum() == 1: #labelled-example
+                H[example_idx] *=0
+                H[example_idx, curr_y.argmax()] = 1
     ##
     for i in xrange(iters):
         H,Z = update_H(H, U, dist, Y)
@@ -42,4 +42,6 @@ def solve_H(H_init, U ,dist,Y=None,iters=100, thresh=0.001):
     return H
 
 def grad_F(F, H):
-    return 2*torch.mm(torch.mm(torch.mm((torch.mm(F,inverse(F)) - torch.eye(F.size()[0])),H),inverse(H)),inverse(F).t())
+    # return 2*torch.mm(torch.mm(torch.mm((torch.mm(F,inverse(F)) - torch.eye(F.size()[0])),H),inverse(H)),inverse(F).t())
+    inv_F = inverse(F)
+    return torch.mm(torch.mm(F,torch.mm(inv_F,H)) - H,torch.mm(inv_H(H),inv_F.t()))

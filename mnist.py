@@ -24,6 +24,8 @@ from model.cnn import cnn
 
 from tensorflow.python.platform import flags
 
+##TODO: replace C_hat with F for faster computation
+##Question on my mind: how much does unlabelled data actually help (how much do we need here)
 
 def get_pred(model, support_X, support_Y, X_val, Y_val):
     support_F = model.forward(support_X).data
@@ -42,14 +44,37 @@ def get_pred(model, support_X, support_Y, X_val, Y_val):
     val_pred = torch.pow(Z_aug- U_aug,2).numpy().sum(-1).argmin(-1)
     return val_pred
 
+def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val):
+    """
+    concatenate support_X with X_val,
+    perform SVD, using support_X to compute centroid in U, 
+    do assignment for X_val
+    """
+    joint_X = torch.cat((support_X, Variable(torch.FloatTensor(X_val))), 0)
+
+    joint_F = model.forward(joint_X).data
+    joint_U, _, _ = torch.svd(torch.mm(joint_F, inverse(joint_F)))
+    joint_U = joint_U[:,:10]
+
+    support_U = joint_U[:support_X.size()[0]]
+    val_U = joint_U[support_X.size()[0]:]
+    support_Z = torch.mm(inv_H(support_Y), support_U)
+
+    #compute distance
+    Z_aug = support_Z[None].repeat(val_U.size()[0], 1,1)
+    U_aug = val_U[:,None].repeat(1,support_Z.size()[0],1)
+    val_pred = torch.pow(Z_aug- U_aug,2).numpy().sum(-1).argmin(-1)
+    return val_pred
+
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('max_train_iters', 5000, 'Number of iterations to train model')
+flags.DEFINE_integer('max_train_iters', 1000, 'Number of iterations to train model')
 flags.DEFINE_integer('batch_size', 1000, 'Size of training batches')
-flags.DEFINE_float('fraction_labelled', 0.2, 'fraction of labelled training examples')
+flags.DEFINE_float('fraction_labelled', 0.2, 'fraction of labelled training examples in training set')
 flags.DEFINE_string('exp_prefix', '', 'prefix for experiment name')
 flags.DEFINE_string('model_name', 'cnn', '"fc" or "cnn"')
+flags.DEFINE_float('flpb', None, 'fraction of labelled examples used per batch')
 ### Constant
 NUM_VAL=1000
 
@@ -131,7 +156,10 @@ val_writer = tf.summary.FileWriter(os.path.join(log_folder, 'val'), sess.graph)
 tf.global_variables_initializer().run()
 
 # f, (ax1, ax2) = plt.subplots(1, 2, figsize=(8,4))
-batcher = MiniBatcher(X.size()[0], batch_size=FLAGS.batch_size)
+if FLAGS.flpb is not None:
+    batcher = MiniBatcher(X.size()[0], batch_size=FLAGS.batch_size, Y_semi=Y_semi, fraction_labelled_per_batch=FLAGS.flpb)
+else:
+    batcher = MiniBatcher(X.size()[0], batch_size=FLAGS.batch_size)
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
 support_example_indices = support_example_indices[:FLAGS.batch_size]
@@ -193,8 +221,8 @@ for idx in tqdm(xrange(FLAGS.max_train_iters)):
     #validate
     if idx>0 and idx%10==0:
         
-        # val_pred = get_pred(model, X_batch, Y[torch.LongTensor(idxs)], X_val, Y_val)
-        val_pred = get_pred(model, support_X, support_Y, X_val, Y_val)
+        # val_pred = get_pred(model, support_X, support_Y, X_val, Y_val)
+        val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val)
         val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
         print (val_accuracy)
         acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})

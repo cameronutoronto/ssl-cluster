@@ -1,5 +1,10 @@
-import tensorflow as tf
+# from keras.datasets import cifar10
+# from keras.utils import np_utils
+# import keras 
+# from keras import backend
+
 import torch
+import tensorflow as tf
 from torch import optim
 import numpy as np
 import seaborn as sns
@@ -20,13 +25,71 @@ from utils import MiniBatcher
 import datetime
 
 from model.fc import fc
-from model.cnn import cnn
+from model.cnn import cnn,cnn2
 
 from tensorflow.python.platform import flags
+import cPickle as pkl
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_integer('max_train_iters', 10000, 'Number of iterations to train model')
+flags.DEFINE_integer('batch_size', 500, 'Size of training batches')
+flags.DEFINE_float('fraction_labelled', 1, 'fraction of labelled training examples in training set')
+flags.DEFINE_string('exp_prefix', 'cifar', 'prefix for experiment name')
+flags.DEFINE_string('model_name', 'cnn', '"fc" or "cnn"')
+flags.DEFINE_float('flpb', None, 'fraction of labelled examples used per batch')
+
+
+
+fraction_unlabelled = 1 - FLAGS.fraction_labelled
+timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+exp_name = '{}-{}-{}-{}'.format(FLAGS.exp_prefix, fraction_unlabelled, FLAGS.model_name,timestamp)
+print ('\n\n\n\n>>>>>>>>>')
+print (exp_name)
+print ('\n\n\n\n<<<<<<<<<')
+
+
+def data_cifar10():
+    """
+    Preprocess CIFAR10 dataset
+    :return:
+    """
+
+    # # These values are specific to CIFAR10
+    # img_rows = 32
+    # img_cols = 32
+    # nb_classes = 10
+
+    # # the data, shuffled and split between train and test sets
+    # (X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+    # if keras.backend.image_dim_ordering() == 'th':
+    #     X_train = X_train.reshape(X_train.shape[0], 3, img_rows, img_cols)
+    #     X_test = X_test.reshape(X_test.shape[0], 3, img_rows, img_cols)
+    # else:
+    #     X_train = X_train.reshape(X_train.shape[0], img_rows, img_cols, 3)
+    #     X_test = X_test.reshape(X_test.shape[0], img_rows, img_cols, 3)
+    # X_train = X_train.astype('float32')
+    # X_test = X_test.astype('float32')
+    # X_train /= 255
+    # X_test /= 255
+    # print('X_train shape:', X_train.shape)
+    # print(X_train.shape[0], 'train samples')
+    # print(X_test.shape[0], 'test samples')
+
+    # # convert class vectors to binary class matrices
+    # Y_train = np_utils.to_categorical(y_train, nb_classes)
+    # Y_test = np_utils.to_categorical(y_test, nb_classes)
+    # return X_train, Y_train, X_test, Y_test
+    return pkl.load(open('data/cifar10.p','rb'))
+
+
+
+
 
 ##TODO: replace C_hat with F for faster computation
 ##Question on my mind: how much does unlabelled data actually help (how much do we need here)
-# print ('...')
+
 def get_pred(model, support_X, support_Y, X_val, Y_val):
     support_F = model.forward(support_X).data
     support_Z = torch.mm(inv_H(support_Y), support_F)
@@ -67,14 +130,7 @@ def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val):
     return val_pred
 
 
-FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('max_train_iters', 1000, 'Number of iterations to train model')
-flags.DEFINE_integer('batch_size', 1000, 'Size of training batches')
-flags.DEFINE_float('fraction_labelled', 0.2, 'fraction of labelled training examples in training set')
-flags.DEFINE_string('exp_prefix', '', 'prefix for experiment name')
-flags.DEFINE_string('model_name', 'cnn', '"fc" or "cnn"')
-flags.DEFINE_float('flpb', None, 'fraction of labelled examples used per batch')
 ### Constant
 NUM_VAL=1000
 
@@ -92,8 +148,8 @@ NUM_VAL=1000
 #             ax.scatter(X_filt[:,0], X_filt[:,1])
 
 ## Experiment stuff
-if not os.path.exists('./saves/mnist'):
-    os.makedirs('./saves/mnist')
+if not os.path.exists('./saves/cifar10'):
+    os.makedirs('./saves/cifar10')
 
 
 ## Metric
@@ -101,7 +157,7 @@ dist = Euclidean()
 
 
 ## Data
-X, Y, X_test, Y_test = data_mnist()
+X, Y, X_test, Y_test = data_cifar10()
 X_val = X_test[:NUM_VAL]
 Y_val = Y_test[:NUM_VAL]
 
@@ -111,7 +167,6 @@ Y = torch.FloatTensor(Y)
 # Dataset (X size(N,D) , Y size(N,K))
 
 ## SSL mask
-fraction_unlabelled = 1 - FLAGS.fraction_labelled
 Y_semi = torch.FloatTensor(np.array(Y.numpy(),copy=True))
 # Y_semi.index(torch.floor(torch.rand(X.size(0)) * n_cluster).long())
 idxs = np.arange(Y.size()[0])
@@ -125,15 +180,14 @@ for idx in xrange(int(fraction_unlabelled * Y.size()[0])):
 if FLAGS.model_name =='fc':
     model = fc(1000)
 elif FLAGS.model_name == 'cnn':
-    model = cnn(128)
+    model = cnn(128, input_dim=[32,32,3])
+elif FLAGS.model_name == 'cnn2':
+    model = cnn2(1, input_dim=[32,32,3])
 
 opt = optim.SGD(model.parameters(), lr = .01, momentum=0.5)
 
 
 ## tensorboard
-timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
-exp_name = '{}-{}-{}-{}'.format(FLAGS.exp_prefix, fraction_unlabelled, FLAGS.model_name,timestamp)
-
 #ph
 ph_accuracy = tf.placeholder(tf.float32,  name='accuracy')
 ph_loss = tf.placeholder(tf.float32,  name='gain')

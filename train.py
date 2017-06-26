@@ -37,7 +37,7 @@ import datetime
 
 from model.fc import fc
 from model.cnn import cnn,cnn2
-from ssl_utils import ssl_basic
+from ssl_utils import ssl_basic, ssl_per_class
 import cPickle as pkl
 from multiprocessing import Pool
 
@@ -183,12 +183,14 @@ ph_accuracy = tf.placeholder(tf.float32,  name='accuracy')
 ph_loss = tf.placeholder(tf.float32,  name='gain')
 ph_Gnorm = tf.placeholder(tf.float32, name='G_norm')
 ph_Ysemi_labs = tf.placeholder(tf.int32, shape=[None], name='Ysemi_labs')
+ph_class_min = tf.placeholder(tf.int32, name='class_min')
 if not os.path.exists('./logs'):
     os.mkdir('./logs')
 tf_acc = tf.summary.scalar('accuracy', ph_accuracy)
 tf_loss = tf.summary.scalar('gain', ph_loss)
 tf_Gnorm = tf.summary.scalar('G_norm', ph_Gnorm)
 tf_Ysemi_labs = tf.summary.histogram('Ysemi_labs', ph_Ysemi_labs)
+tf_class_min = tf.summary.scalar('class_min_count', ph_class_min)
 
 tf_summary = tf.summary.merge_all()
 log_folder = os.path.join('./logs', exp_name)
@@ -254,6 +256,7 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     tmp = Y_batch.numpy()
     ylab = tmp[tmp.sum(1)==1].argmax(1)
     tmp_Ysemi_labs = sess.run(tf_Ysemi_labs, feed_dict={ph_Ysemi_labs:ylab.astype('int32')})
+    tmp_class_min = sess.run(tf_class_min, feed_dict={ph_class_min:np.bincount(tmp[tmp.sum(1)==1].argmax(1)).min()})
     train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs, idx)
 
     #validate

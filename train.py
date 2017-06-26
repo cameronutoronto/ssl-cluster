@@ -1,8 +1,19 @@
-# from keras.datasets import cifar10
-# from keras.utils import np_utils
-# import keras 
-# from keras import backend
+"""train.py
+Usage:
+    train.py <f_data_config> <f_model_config> <f_opt_config>
 
+Arguments:
+    <f_data_config>  example ''data/config/train_rev0.yaml''
+    <f_model_config> example 'model/config/conv2d-3layers.yaml'
+    <f_opt_config> example 'opt/config/basic.yaml'
+
+Example:
+
+Options:
+"""
+
+from docopt import docopt
+import yaml
 import torch
 import tensorflow as tf
 from torch import optim
@@ -26,29 +37,34 @@ import datetime
 
 from model.fc import fc
 from model.cnn import cnn,cnn2
-
-from tensorflow.python.platform import flags
+from ssl_utils import ssl_basic
 import cPickle as pkl
 
-FLAGS = flags.FLAGS
 
-flags.DEFINE_integer('max_train_iters', 10000, 'Number of iterations to train model')
-flags.DEFINE_integer('batch_size', 500, 'Size of training batches')
-flags.DEFINE_float('fraction_labelled', 1, 'fraction of labelled training examples in training set')
-flags.DEFINE_string('exp_prefix', 'cifar', 'prefix for experiment name')
-flags.DEFINE_string('model_name', 'cnn', '"fc" or "cnn"')
-flags.DEFINE_float('flpb', None, 'fraction of labelled examples used per batch')
+#### 
+arguments = docopt(__doc__)
+print ("...Docopt... ")
+print(arguments)
+print ("............\n")
 
+f_data_config = arguments['<f_data_config>']
+f_model_config = arguments['<f_model_config>']
+f_opt_config = arguments['<f_opt_config>']
+data_config = yaml.load(open(f_data_config, 'rb'))
+model_config = yaml.load(open(f_model_config, 'rb'))
+opt_config = yaml.load(open(f_opt_config, 'rb'))
+data_name = os.path.basename(f_data_config).split('.')[0]
+model_name = os.path.basename(f_model_config).split('.')[0]
+opt_name = os.path.basename(f_opt_config).split('.')[0]
 
-
-fraction_unlabelled = 1 - FLAGS.fraction_labelled
 timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
-exp_name = '{}-{}-{}-{}'.format(FLAGS.exp_prefix, fraction_unlabelled, FLAGS.model_name,timestamp)
-print ('\n\n\n\n>>>>>>>>>')
+exp_name = '%s-X-%s-X-%s-%s' % (model_name, opt_name, data_name, timestamp)
+print ('\n\n\n\n>>>>>>>>> [Experiment Name]')
 print (exp_name)
-print ('\n\n\n\n<<<<<<<<<')
+print ('<<<<<<<<<\n\n\n\n')
 
 
+### TODO: make loading data faster...
 def data_cifar10():
     """
     Preprocess CIFAR10 dataset
@@ -87,25 +103,8 @@ def data_cifar10():
 
 
 
-##TODO: replace C_hat with F for faster computation
-##Question on my mind: how much does unlabelled data actually help (how much do we need here)
-
-def get_pred(model, support_X, support_Y, X_val, Y_val):
-    support_F = model.forward(support_X).data
-    support_Z = torch.mm(inv_H(support_Y), support_F)
-    # support_U, _, _ = torch.svd(torch.mm(support_F, inverse(support_F)))
-    # support_U = support_U[:,:10]
-    # support_Z = torch.mm(inv_H(support_Y), support_U)
-
-    val_F = model.forward(Variable(torch.FloatTensor(X_val))).data
-    # val_U, _, _ = torch.svd(torch.mm(val_F, inverse(val_F)))
-    # val_U = val_U[:,:10]
-    val_U = val_F
-    #compute distance
-    Z_aug = support_Z[None].repeat(val_U.size()[0], 1,1)
-    U_aug = val_U[:,None].repeat(1,support_Z.size()[0],1)
-    val_pred = torch.pow(Z_aug- U_aug,2).numpy().sum(-1).argmin(-1)
-    return val_pred
+# ##TODO: replace C_hat with F for faster computation
+# ##Question on my mind: how much does unlabelled data actually help (how much do we need here)
 
 def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val):
     """
@@ -130,36 +129,21 @@ def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val):
     return val_pred
 
 
-
-### Constant
-NUM_VAL=1000
-
-
-
-# def plot(ax, X, labels=None):
-#     if labels is None:
-#         X = X.numpy()
-#         ax.scatter(X[:,0], X[:,1], color='k')
-#     else:
-#         for i in range(labels.size(1)):
-#             if len(labels[:,i].nonzero().size()) == 0:
-#                 continue
-#             X_filt = X[labels[:,i].nonzero().view(-1)].numpy()
-#             ax.scatter(X_filt[:,0], X_filt[:,1])
-
 ## Experiment stuff
-if not os.path.exists('./saves/cifar10'):
-    os.makedirs('./saves/cifar10')
+if not os.path.exists('./saves/%s'%exp_name):
+    os.makedirs('./saves/%s'%exp_name)
 
 
 ## Metric
 dist = Euclidean()
 
 
+
 ## Data
-X, Y, X_test, Y_test = data_cifar10()
-X_val = X_test[:NUM_VAL]
+X, Y, X_test, Y_test = eval('data_%s'%(data_config['name']))()
+NUM_VAL=data_config['num_val'] ## TODO: allow for more validation examples, loop over them...
 Y_val = Y_test[:NUM_VAL]
+X_val = X_test[:NUM_VAL]
 
 X = torch.FloatTensor(X)
 X = Variable(X)
@@ -167,24 +151,17 @@ Y = torch.FloatTensor(Y)
 # Dataset (X size(N,D) , Y size(N,K))
 
 ## SSL mask
-Y_semi = torch.FloatTensor(np.array(Y.numpy(),copy=True))
-# Y_semi.index(torch.floor(torch.rand(X.size(0)) * n_cluster).long())
-idxs = np.arange(Y.size()[0])
-np.random.shuffle(idxs)
-for idx in xrange(int(fraction_unlabelled * Y.size()[0])):
-    Y_semi[idxs[idx]] = torch.ones(Y.size()[1])
+# Given completely labelled training Y, and a function, 
+# prepare Y_semi
+Y_semi = eval(data_config['ssl_config']['fname'])(Y, **data_config['ssl_config']['kwargs'])
 
 
 
 ## Model
-if FLAGS.model_name =='fc':
-    model = fc(1000)
-elif FLAGS.model_name == 'cnn':
-    model = cnn(128, input_dim=[32,32,3])
-elif FLAGS.model_name == 'cnn2':
-    model = cnn2(1, input_dim=[32,32,3])
+model = eval(model_config['name'])(**model_config['kwargs'])
 
-opt = optim.SGD(model.parameters(), lr = .005, momentum=0.9)
+## Optimizer
+opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
 
 
 ## tensorboard
@@ -209,26 +186,23 @@ train_writer = tf.summary.FileWriter(
 val_writer = tf.summary.FileWriter(os.path.join(log_folder, 'val'), sess.graph)
 tf.global_variables_initializer().run()
 
-# f, (ax1, ax2) = plt.subplots(1, 2, figsize=(8,4))
-if FLAGS.flpb is not None:
-    batcher = MiniBatcher(X.size()[0], batch_size=FLAGS.batch_size, Y_semi=Y_semi, fraction_labelled_per_batch=FLAGS.flpb)
-else:
-    batcher = MiniBatcher(X.size()[0], batch_size=FLAGS.batch_size)
+opt_config['batcher_kwargs']['Y_semi'] = Y_semi
+batcher = MiniBatcher(X.size()[0], **opt_config['batcher_kwargs'])
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
-support_example_indices = support_example_indices[:FLAGS.batch_size]
+support_example_indices = support_example_indices[:opt_config['batcher_kwargs']['batch_size']]
 support_X = X[torch.LongTensor(support_example_indices)]
 support_Y = Y[torch.LongTensor(support_example_indices)]
 
 ## Algorithm
-for idx in tqdm(xrange(FLAGS.max_train_iters)):
+for idx in tqdm(xrange(opt_config['max_train_iters'])):
     idxs = batcher.next()
     X_batch = X[torch.LongTensor(idxs)]
     Y_batch = Y_semi[torch.LongTensor(idxs)]
     F = model.forward(X_batch).data
     # C_hat = torch.mm(F, inverse(F))
     u, s, v = torch.svd(F)
-    ##TODO: use svd of F, not C_hat
+    ## URGENT TODO: use svd of F, not C_hat
     # u_r = u[:,:np.linalg.matrix_rank(C_hat.numpy())]
     u_r = u
     
@@ -254,19 +228,8 @@ for idx in tqdm(xrange(FLAGS.max_train_iters)):
     # C = torch.mm(pt_H, inverse(pt_H))
     # loss = torch.trace( torch.mm(C, torch.mm(pt_F, inverse(pt_F)).t() ))
     loss = torch.dot(torch.mm(inverse(pt_H),pt_F),torch.mm(inverse(pt_F), pt_H).t())
-    
-    ## checking this way of computing accuracy is correct
-    ## works
-    # val_pred = get_pred(model, X_batch,Y[torch.LongTensor(idxs)] , X_batch.data.numpy(), Y_batch.numpy())
-    # doesn't work
-    # val_pred = get_pred(model, X_batch,Y[torch.LongTensor(idxs)] , X[torch.LongTensor(np.arange(FLAGS.batch_size))].data.numpy(), Y[torch.LongTensor(np.arange(FLAGS.batch_size))].numpy())
-    # doesn't work
-    # val_pred = get_pred(model, support_X,support_Y , X_batch.data.numpy(), Y_batch.numpy())
-    # doesn't work
-    # val_pred = get_pred(model, X[torch.LongTensor(np.arange(FLAGS.batch_size))],Y[torch.LongTensor(np.arange(FLAGS.batch_size))] , X_batch.data.numpy(), Y_batch.numpy())
-    # train_accuracy = np.mean(train_gt == val_pred)
-    # print ('train')
-    # print (train_accuracy)
+
+
     # summarize
     acc= sess.run(tf_acc, feed_dict={ph_accuracy:train_accuracy})
     loss = sess.run(tf_loss, feed_dict={ph_loss:loss})

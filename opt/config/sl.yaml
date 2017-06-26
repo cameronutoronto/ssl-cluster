@@ -1,0 +1,9 @@
+name: 'optim.SGD'
+kwargs:
+  lr: 0.005
+  momentum: 0.9
+batcher_config:
+  kwargs:
+    batch_size: 1000
+    fraction_labelled_per_batch: None
+max_train_iters: 20000

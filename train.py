@@ -39,7 +39,7 @@ from model.fc import fc
 from model.cnn import cnn,cnn2
 from ssl_utils import ssl_basic
 import cPickle as pkl
-
+from multiprocessing import Pool
 
 #### 
 arguments = docopt(__doc__)
@@ -65,6 +65,8 @@ print ('<<<<<<<<<\n\n\n\n')
 
 
 ### TODO: make loading data faster...
+def load_1_pkl(i):
+    return pkl.load(open('data/cifar10-train-x-%i.p'%i,'rb'))
 def data_cifar10():
     """
     Preprocess CIFAR10 dataset
@@ -97,7 +99,18 @@ def data_cifar10():
     # Y_train = np_utils.to_categorical(y_train, nb_classes)
     # Y_test = np_utils.to_categorical(y_test, nb_classes)
     # return X_train, Y_train, X_test, Y_test
-    return pkl.load(open('data/cifar10.p','rb'))
+    # return pkl.load(open('data/cifar10.p','rb'))
+
+    train = []
+    train_y = pkl.load(open('data/cifar10-train-y.p','rb'))
+    test_y = pkl.load(open('data/cifar10-test-y.p','rb'))
+    test_x = pkl.load(open('data/cifar10-test-x.p','rb'))
+
+    p = Pool(5)
+    train_x = p.map(load_1_pkl, [0, 1, 2, 3, 4])
+    return np.concatenate(train_x,0), train_y, test_x, test_y
+
+
 
 
 
@@ -168,10 +181,15 @@ opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
 #ph
 ph_accuracy = tf.placeholder(tf.float32,  name='accuracy')
 ph_loss = tf.placeholder(tf.float32,  name='gain')
+ph_Gnorm = tf.placeholder(tf.float32, name='G_norm')
+ph_Ysemi_labs = tf.placeholder(tf.int32, shape=[None], name='Ysemi_labs')
 if not os.path.exists('./logs'):
     os.mkdir('./logs')
-tf_acc = tf.summary.scalar('accuray', ph_accuracy)
+tf_acc = tf.summary.scalar('accuracy', ph_accuracy)
 tf_loss = tf.summary.scalar('gain', ph_loss)
+tf_Gnorm = tf.summary.scalar('G_norm', ph_Gnorm)
+tf_Ysemi_labs = tf.summary.histogram('Ysemi_labs', ph_Ysemi_labs)
+
 tf_summary = tf.summary.merge_all()
 log_folder = os.path.join('./logs', exp_name)
 # remove existing log folder for the same model.
@@ -229,11 +247,14 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     # loss = torch.trace( torch.mm(C, torch.mm(pt_F, inverse(pt_F)).t() ))
     loss = torch.dot(torch.mm(inverse(pt_H),pt_F),torch.mm(inverse(pt_F), pt_H).t())
 
-
     # summarize
     acc= sess.run(tf_acc, feed_dict={ph_accuracy:train_accuracy})
     loss = sess.run(tf_loss, feed_dict={ph_loss:loss})
-    train_writer.add_summary(acc+loss, idx)
+    tmp_Gnorm = sess.run(tf_Gnorm, feed_dict={ph_Gnorm:G.norm()})
+    tmp = Y_batch.numpy()
+    ylab = tmp[tmp.sum(1)==1].argmax(1)
+    tmp_Ysemi_labs = sess.run(tf_Ysemi_labs, feed_dict={ph_Ysemi_labs:ylab.astype('int32')})
+    train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs, idx)
 
     #validate
     if idx>0 and idx%10==0:

@@ -67,7 +67,6 @@ print (exp_name)
 print ('<<<<<<<<<\n\n\n\n')
 
 
-### TODO: make loading data faster...
 def load_1_pkl(i):
     return pkl.load(open('data/cifar10-train-x-%i.p'%i,'rb'))
 def data_cifar10():
@@ -236,7 +235,7 @@ opt_config['batcher_kwargs']['Y_semi'] = Y_semi
 batcher = eval(opt_config['batcher_name'])(X.size()[0], **opt_config['batcher_kwargs'])
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
-support_example_indices = support_example_indices[:opt_config['batcher_kwargs']['batch_size']]
+support_example_indices = support_example_indices[:1000] ##WARNING ... 
 support_X = X[torch.LongTensor(support_example_indices)]
 support_Y = Y[torch.LongTensor(support_example_indices)]
 

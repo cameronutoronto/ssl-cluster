@@ -4,6 +4,6 @@ kwargs:
   momentum: 0.9
 batcher_name: MiniBatcherPerClass
 batcher_kwargs:
-  batch_size: 20
-  labels_per_class: 1
+  batch_size: 100
+  labels_per_class: 5
 max_train_iters: 200

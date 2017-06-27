@@ -11,9 +11,9 @@ def energy(dist, X, Y, Z):
     
 def inverse(X):
     u, s, v = torch.svd(X)
-    h = torch.max(s) * 1e-15 * float(max(X.size(0),X.size(1)))
+    h = torch.max(s) * float(max(X.size(0),X.size(1))) * 1e-15
     indices = torch.ge(s,h)
-    indices2 = torch.lt(s,h)
+    indices2 = indices.eq(0)
     s[indices] = 1.0 / s[indices]
     s[indices2] = 0
     return torch.mm(torch.mm(v, torch.diag(s)), u.t())

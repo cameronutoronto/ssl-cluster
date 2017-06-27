@@ -214,11 +214,11 @@ class cnn_globe(cnn_base):
     """architecture of the discriminator of improved gan paper
         only difference is that I'm not using leakyrelu
     """
-    def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10):
+    def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
         super(cnn_globe, self).__init__()
         hid1=96
         hid2=192
-        hidfc=256
+        hidfc=128
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.conv = torch.nn.Sequential(
@@ -232,7 +232,7 @@ class cnn_globe(cnn_base):
             torch.nn.Conv2d(Hn*hid1, Hn*hid1,3,stride=2, padding=1),
             torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid1),
-            torch.nn.Dropout(.5),
+            torch.nn.Dropout(dropout),
             torch.nn.Conv2d(Hn*hid1, Hn*hid2, 3,padding=1),
             torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
@@ -242,7 +242,7 @@ class cnn_globe(cnn_base):
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,stride=2, padding=1),
             torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
-            torch.nn.Dropout(.5),
+            torch.nn.Dropout(dropout),
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=0),
             torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),

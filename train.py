@@ -121,23 +121,14 @@ def data_cifar10():
 
 # ##TODO: replace C_hat with F for faster computation
 # ##Question on my mind: how much does unlabelled data actually help (how much do we need here)
+def _normalize(X):
+    return X / torch.sqrt(torch.pow(X,2).sum(1)).expand_as(X)
+def _center_normalize(X):
+    X = X - X.mean(0).expand_as(X)
+    return _normalize(X)
 
-def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=False):
-    """
-    concatenate support_X with X_val,
-    perform SVD, using support_X to compute centroid in U, 
-    do assignment for X_val
-    """
-    if normalize:
-        pass
-    joint_X = torch.cat((support_X, Variable(torch.FloatTensor(X_val))), 0)
 
-    joint_F = model.forward(joint_X).data
-    joint_U, _, _ = torch.svd(torch.mm(joint_F, inverse(joint_F)))
-    joint_U = joint_U[:,:10]
-
-    support_U = joint_U[:support_X.size()[0]]
-    val_U = joint_U[support_X.size()[0]:]
+def solve_kmeans_to_predict(support_U, support_Y, val_U):
     support_Z = torch.mm(inv_H(support_Y), support_U)
 
     #compute distance
@@ -145,6 +136,32 @@ def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=False
     U_aug = val_U[:,None].repeat(1,support_Z.size()[0],1)
     val_pred = torch.pow(Z_aug- U_aug,2).numpy().sum(-1).argmin(-1)
     return val_pred
+
+def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=False, get_non_spectral=False):
+    """
+    concatenate support_X with X_val,
+    perform SVD, using support_X to compute centroid in U, 
+    do assignment for X_val
+    """
+    joint_X = torch.cat((support_X, Variable(torch.FloatTensor(X_val))), 0)
+    if normalize:
+        joint_X = _center_normalize(joint_X)
+
+    joint_F = model.forward(joint_X).data
+    joint_U, _, _ = torch.svd(torch.mm(joint_F, inverse(joint_F)))
+    joint_U = joint_U[:,:10]
+
+    support_U = joint_U[:support_X.size()[0]]
+    val_U = joint_U[support_X.size()[0]:]
+    
+    val_pred = solve_kmeans_to_predict(support_U, support_Y, val_U)
+    if get_non_spectral:
+        non_spectral_val_pred = solve_kmeans_to_predict(_normalize(joint_U[:support_X.size()[0],:10]), support_Y, _normalize(joint_U[support_X.size()[0]:,:10]))
+    else:
+        non_spectral_val_pred = None
+
+    return val_pred, non_spectral_val_pred
+
 
 
 ## Experiment stuff
@@ -185,6 +202,8 @@ opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
 ## tensorboard
 #ph
 ph_accuracy = tf.placeholder(tf.float32,  name='accuracy')
+ph_accuracy_norm = tf.placeholder(tf.float32,  name='accuracy_norm')
+ph_accuracy_non_spectral = tf.placeholder(tf.float32,  name='accuracy_non_spectral')
 ph_loss = tf.placeholder(tf.float32,  name='gain')
 ph_Gnorm = tf.placeholder(tf.float32, name='G_norm')
 ph_Ysemi_labs = tf.placeholder(tf.int32, shape=[None], name='Ysemi_labs')
@@ -192,6 +211,8 @@ ph_class_min = tf.placeholder(tf.int32, name='class_min')
 if not os.path.exists('./logs'):
     os.mkdir('./logs')
 tf_acc = tf.summary.scalar('accuracy', ph_accuracy)
+tf_accuracy_norm = tf.summary.scalar('accuracy_norm', ph_accuracy_norm)
+tf_accuracy_non_spectral = tf.summary.scalar('accuracy_non_spectral', ph_accuracy_non_spectral)
 tf_loss = tf.summary.scalar('gain', ph_loss)
 tf_Gnorm = tf.summary.scalar('G_norm', ph_Gnorm)
 tf_Ysemi_labs = tf.summary.histogram('Ysemi_labs', ph_Ysemi_labs)
@@ -268,11 +289,16 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     if idx>0 and idx%10==0:
         model.eval()
         # val_pred = get_pred(model, support_X, support_Y, X_val, Y_val)
-        val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val)
+        val_pred, non_spectral_val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, get_non_spectral=True)
         val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
+        val_accuracy_non_spectral = np.mean(Y_val.argmax(1) == non_spectral_val_pred)
         print (val_accuracy)
         acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})
-        val_writer.add_summary(acc, idx)
+        acc_non_spectral= sess.run(tf_accuracy_non_spectral, feed_dict={ph_accuracy_non_spectral:val_accuracy_non_spectral})
+        val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=True)
+        val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
+        acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy})
+        val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
         model.train()
 
 

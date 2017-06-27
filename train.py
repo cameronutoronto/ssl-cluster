@@ -1,6 +1,6 @@
 """train.py
 Usage:
-    train.py <f_data_config> <f_model_config> <f_opt_config>
+    train.py <f_data_config> <f_model_config> <f_opt_config> [--prefix <p>]
 
 Arguments:
     <f_data_config>  example ''data/config/train_rev0.yaml''
@@ -31,12 +31,12 @@ from main import solve_H, grad_F, inv_H
 from cluster_utils import centroids, energy, inverse
 from metric import Euclidean
 from cleverhans.utils_mnist import data_mnist
-from utils import MiniBatcher
+from utils import MiniBatcher, MiniBatcherPerClass
 
 import datetime
 
 from model.fc import fc
-from model.cnn import cnn,cnn2
+from model.cnn import *
 from ssl_utils import ssl_basic, ssl_per_class
 import cPickle as pkl
 from multiprocessing import Pool
@@ -58,7 +58,10 @@ model_name = os.path.basename(f_model_config).split('.')[0]
 opt_name = os.path.basename(f_opt_config).split('.')[0]
 
 timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
-exp_name = '%s-X-%s-X-%s-%s' % (model_name, opt_name, data_name, timestamp)
+if arguments['--prefix']:
+    exp_name = '%s:%s-X-%s-X-%s-%s' % (arguments['<p>'], model_name, opt_name, data_name, timestamp)
+else:
+    exp_name = '%s-X-%s-X-%s-%s' % (model_name, opt_name, data_name, timestamp)
 print ('\n\n\n\n>>>>>>>>> [Experiment Name]')
 print (exp_name)
 print ('<<<<<<<<<\n\n\n\n')
@@ -207,7 +210,7 @@ val_writer = tf.summary.FileWriter(os.path.join(log_folder, 'val'), sess.graph)
 tf.global_variables_initializer().run()
 
 opt_config['batcher_kwargs']['Y_semi'] = Y_semi
-batcher = MiniBatcher(X.size()[0], **opt_config['batcher_kwargs'])
+batcher = eval(opt_config['batcher_name'])(X.size()[0], **opt_config['batcher_kwargs'])
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
 support_example_indices = support_example_indices[:opt_config['batcher_kwargs']['batch_size']]
@@ -257,17 +260,18 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     ylab = tmp[tmp.sum(1)==1].argmax(1)
     tmp_Ysemi_labs = sess.run(tf_Ysemi_labs, feed_dict={ph_Ysemi_labs:ylab.astype('int32')})
     tmp_class_min = sess.run(tf_class_min, feed_dict={ph_class_min:np.bincount(tmp[tmp.sum(1)==1].argmax(1)).min()})
-    train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs, idx)
+    train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
 
     #validate
     if idx>0 and idx%10==0:
-        
+        model.eval()
         # val_pred = get_pred(model, support_X, support_Y, X_val, Y_val)
         val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val)
         val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
         print (val_accuracy)
         acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})
         val_writer.add_summary(acc, idx)
+        model.train()
 
 
 

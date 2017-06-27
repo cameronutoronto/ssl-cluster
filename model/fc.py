@@ -27,3 +27,8 @@ class fc(model):
         
     def zero_grad(self):
         self.model.zero_grad()
+
+    def eval(self):
+        self.model.eval()
+    def train(self):
+        self.model.train()

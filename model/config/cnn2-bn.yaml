@@ -1,0 +1,4 @@
+name: cnn_bn
+kwargs:
+  Hn: 2
+  input_dim: [32,32,3]

@@ -2,6 +2,7 @@ name: 'optim.SGD'
 kwargs:
   lr: 0.005
   momentum: 0.9
+batcher_name: MiniBatcher
 batcher_config:
   kwargs:
     batch_size: 1000

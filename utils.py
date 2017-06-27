@@ -41,3 +41,39 @@ class MiniBatcher(object):
 			return np.array(list(self.labelled_idxs[:self.N_labelled])+list(self.unlabelled_idxs[:self.N_unlabelled]))
 
 
+class MiniBatcherPerClass(object):
+	def __init__(self, N, batch_size=32, Y_semi=None, labels_per_class=None, sample=True):
+		self.N = N
+		self.batch_size=batch_size
+		self.labels_per_class = int(labels_per_class)
+		self.idxs_per_class = [[] for i in xrange(Y_semi.size()[1])]
+		self.unlabelled_idxs = []
+		self.sample = sample
+		np_Y_semi = Y_semi.numpy()
+		for example_idx in xrange(np_Y_semi.shape[0]):
+			curr_Y = np_Y_semi[example_idx]
+			if curr_Y.sum() >1:
+				self.unlabelled_idxs.append(example_idx)
+			else:
+				self.idxs_per_class[curr_Y.argmax()].append(example_idx)
+		## if not enough labels
+		min_count = np.min([len(labs) for labs in self.idxs_per_class])
+		if min_count < self.labels_per_class:
+			fac = np.ceil(self.labels_per_class/min_count)
+			self.idxs_per_class = [np.array(labs).repeat(fac) for labs in self.idxs_per_class]
+
+
+	def next(self):
+		if self.sample:
+			ret_list = []
+			for labs in self.idxs_per_class:
+				np.random.shuffle(labs)
+				ret_list.append(labs[:self.labels_per_class])
+			np.random.shuffle(self.unlabelled_idxs)
+			ret_list.append(self.unlabelled_idxs[:self.batch_size - (len(self.idxs_per_class)*self.labels_per_class)])
+			return np.concatenate(ret_list)
+		else:
+			"""
+			instead of random idxs, loop through them
+			"""
+			raise NotImplementedError()

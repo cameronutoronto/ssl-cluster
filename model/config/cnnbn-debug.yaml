@@ -1,0 +1,4 @@
+name: cnn_bn_db
+kwargs:
+  Hn: 1
+  input_dim: [28,28,1]

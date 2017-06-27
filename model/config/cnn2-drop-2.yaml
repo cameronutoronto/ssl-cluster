@@ -1,0 +1,5 @@
+name: cnn2
+kwargs:
+  Hn: 1
+  input_dim: [32,32,3]
+  dropout: .3

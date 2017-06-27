@@ -122,12 +122,14 @@ def data_cifar10():
 # ##TODO: replace C_hat with F for faster computation
 # ##Question on my mind: how much does unlabelled data actually help (how much do we need here)
 
-def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val):
+def get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=False):
     """
     concatenate support_X with X_val,
     perform SVD, using support_X to compute centroid in U, 
     do assignment for X_val
     """
+    if normalize:
+        pass
     joint_X = torch.cat((support_X, Variable(torch.FloatTensor(X_val))), 0)
 
     joint_F = model.forward(joint_X).data

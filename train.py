@@ -260,21 +260,18 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     idxs = batcher.next()
     X_batch = X[torch.LongTensor(idxs)]
     Y_batch = Y_semi[torch.LongTensor(idxs)]
-    F = model.forward(X_batch).data
-    # C_hat = torch.mm(F, inverse(F))
-    u, s, v = torch.svd(F)
-    ## URGENT TODO: use svd of F, not C_hat
-    # u_r = u[:,:np.linalg.matrix_rank(C_hat.numpy())]
-    u_r = u
-    
+    ## network
+    tv_F = model.forward(X_batch)
+    F = tv_F.data.clone()
+    ### loss layer
+    u_r, s, v = torch.svd(F)  
     H_init = np.array(Y_batch.numpy(), copy=True)
     H_init[H_init.sum(1) > 1] *= 0
-    H = solve_H(torch.FloatTensor(H_init), u_r,dist,Y=Y_batch.numpy(),iters=100)
+    H = solve_H(torch.FloatTensor(H_init), u_r,dist,Y=Y_batch.numpy(),iters=10)
 
     model.zero_grad()
     G = grad_F(F,H)
-    F = model.forward(X_batch)
-    F.backward(gradient=G)
+    tv_F.backward(gradient=G)
     opt.step()
 
 
@@ -284,10 +281,8 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     train_gt = Y[torch.LongTensor(idxs)].numpy().argmax(1)
     train_accuracy = (train_pred[batcher.start_unlabelled:] == train_gt[batcher.start_unlabelled:]).mean()
     #loss
-    pt_F = F.data
+    pt_F = F
     pt_H = H
-    # C = torch.mm(pt_H, inverse(pt_H))
-    # loss = torch.trace( torch.mm(C, torch.mm(pt_F, inverse(pt_F)).t() ))
     loss = torch.dot(torch.mm(inverse(pt_H),pt_F),torch.mm(inverse(pt_F), pt_H).t())
 
     # summarize
@@ -301,7 +296,7 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
 
     #validate
-    if idx>0 and idx%10==0:
+    if idx>0 and idx%20==0:
         model.eval()
         # val_pred = get_pred(model, support_X, support_Y, X_val, Y_val)
         val_pred, non_spectral_val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, get_non_spectral=True)
@@ -316,7 +311,7 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
         val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
         model.train()
     ## checkpoint
-    if idx>0 and idx%5==0:
+    if idx>0 and idx%50==0:
         name = './saves/%s/model_%i.t7'%(exp_name,idx)
         print ("[Saving to]")
         print (name)

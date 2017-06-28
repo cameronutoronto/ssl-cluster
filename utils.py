@@ -61,6 +61,7 @@ class MiniBatcherPerClass(object):
 		if min_count < self.labels_per_class:
 			fac = np.ceil(self.labels_per_class/min_count)
 			self.idxs_per_class = [np.array(labs).repeat(fac) for labs in self.idxs_per_class]
+		self.start_unlabelled = len(self.idxs_per_class)*self.labels_per_class
 
 
 	def next(self):
@@ -70,7 +71,7 @@ class MiniBatcherPerClass(object):
 				np.random.shuffle(labs)
 				ret_list.append(labs[:self.labels_per_class])
 			np.random.shuffle(self.unlabelled_idxs)
-			ret_list.append(self.unlabelled_idxs[:self.batch_size - (len(self.idxs_per_class)*self.labels_per_class)])
+			ret_list.append(self.unlabelled_idxs[:self.batch_size - self.start_unlabelled])
 			return np.concatenate(ret_list)
 		else:
 			"""

@@ -266,7 +266,7 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
     #accuracy
     train_pred = H.numpy().argmax(1)
     train_gt = Y[torch.LongTensor(idxs)].numpy().argmax(1)
-    train_accuracy = (train_pred == train_gt).mean()
+    train_accuracy = (train_pred[batcher.start_unlabelled:] == train_gt[batcher.start_unlabelled:]).mean()
     #loss
     pt_F = F.data
     pt_H = H
@@ -294,7 +294,7 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
         print (val_accuracy)
         acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})
         acc_non_spectral= sess.run(tf_accuracy_non_spectral, feed_dict={ph_accuracy_non_spectral:val_accuracy_non_spectral})
-        val_pred = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=True)
+        val_pred,_ = get_pred_join_SVD(model, support_X, support_Y, X_val, Y_val, normalize=True)
         val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
         acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy})
         val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)

@@ -61,6 +61,9 @@ class cnn2(cnn_base):
     """docstring for fc"""
     def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10,dropout=0):
         super(cnn2, self).__init__()
+        raise() ### even without dropout it didn't work...
+                ### it used to work with 2 conv layers each, 
+                ### ....?
         hid1=48
         hid2=96
         hid3=96
@@ -213,6 +216,7 @@ class cnn_bn_db(cnn_base):
 class cnn_globe(cnn_base):
     """architecture of the discriminator of improved gan paper
         only difference is that I'm not using leakyrelu
+        and they have 'wight norm'....
     """
     def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
         super(cnn_globe, self).__init__()
@@ -271,3 +275,63 @@ class cnn_globe(cnn_base):
         ## average pool across channels
         tmp = tmp.mean(-1).view(N, self.fc_dim)
         return self.fc(tmp)
+
+class cnn_dngo(cnn_base):
+    """architecture of the discriminator of improved gan paper
+        only difference is that I'm not using leakyrelu
+    """
+    def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
+        super(cnn_dngo, self).__init__()
+        hid1=96
+        hid2=192
+        hidfc=128
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.conv = torch.nn.Sequential(
+            torch.nn.Dropout(.2),
+            torch.nn.Conv2d(input_dim[-1], Hn*hid1, 3,padding=1),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.Conv2d(Hn*hid1, Hn*hid1, 3,padding=1),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.Dropout(dropout),
+            torch.nn.Conv2d(Hn*hid1, Hn*hid2, 3,padding=1),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.Dropout(dropout),
+            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=0),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            ## 1x1 convs on 6x6 images
+            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 1,padding=0),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(Hn*hid2, output_dim, 1,padding=0),
+        )
+        self.output_dim = output_dim
+    def forward(self, input):
+        N = input.size()[0]
+        input = input.permute(0,3,1,2)
+        tmp = self.conv(input)
+        ## (N, output_dim, 6,6) -> (N, , -1)
+        tmp = tmp.view(N, self.output_dim, -1)
+        ## average pool across channels
+        tmp = tmp.mean(-1).view(N, self.output_dim)
+        return tmp
+    def eval(self):
+        self.conv.eval()
+    def train(self):
+        self.conv.train()
+    def parameters(self):
+        return list(self.conv.parameters())
+    def zero_grad(self):
+        self.conv.zero_grad()

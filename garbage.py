@@ -1,7 +1,9 @@
 """garbage.py
 Usage:  
-   garbage.py <f_data_config> [--prefix <something>]
-
+   garbage.py <f_data_config> [--prefix <something>] 
+   garbage.py --test
+   garbage.py -g
+   
 Arguments:
     <f_data_config>  example ''data/config/train_rev0.yaml''
     <f_model_config> example 'model/config/conv2d-3layers.yaml'

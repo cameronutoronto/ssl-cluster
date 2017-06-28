@@ -1,6 +1,7 @@
 """train.py
 Usage:
-    train.py <f_data_config> <f_model_config> <f_opt_config> [--prefix <p>]
+    train.py <f_data_config> <f_model_config> <f_opt_config> [--prefix <p>] 
+    train.py -r <exp_name> <idx> [--test]
 
 Arguments:
     <f_data_config>  example ''data/config/train_rev0.yaml''
@@ -47,21 +48,30 @@ print ("...Docopt... ")
 print(arguments)
 print ("............\n")
 
-f_data_config = arguments['<f_data_config>']
-f_model_config = arguments['<f_model_config>']
-f_opt_config = arguments['<f_opt_config>']
+if arguments['-r']:
+    exp_name = arguments['<exp_name>']
+    f_model_config = 'model/config/'+exp_name[exp_name.find(':')+1:].split('-X-')[0]+'.yaml'
+    f_opt_config = 'opt/config/'+exp_name[exp_name.find(':')+1:].split('-X-')[1]+'.yaml'
+    f_data_config = 'data/config/'+exp_name[exp_name.find(':')+1:].split('-X-')[2].split('@')[0] +'.yaml'
+    old_exp_name = exp_name
+    exp_name += '_resumed'
+else:
+    f_data_config = arguments['<f_data_config>']
+    f_model_config = arguments['<f_model_config>']
+    f_opt_config = arguments['<f_opt_config>']
+    data_name = os.path.basename(f_data_config).split('.')[0]
+    model_name = os.path.basename(f_model_config).split('.')[0]
+    opt_name = os.path.basename(f_opt_config).split('.')[0]
+    timestamp = '{:%Y-%m-%d}'.format(datetime.datetime.now())
+    if arguments['--prefix']:
+        exp_name = '%s:%s-X-%s-X-%s@%s' % (arguments['<p>'], model_name, opt_name, data_name, timestamp)
+    else:
+        exp_name = '%s-X-%s-X-%s@%s' % (model_name, opt_name, data_name, timestamp)
+    
 data_config = yaml.load(open(f_data_config, 'rb'))
 model_config = yaml.load(open(f_model_config, 'rb'))
 opt_config = yaml.load(open(f_opt_config, 'rb'))
-data_name = os.path.basename(f_data_config).split('.')[0]
-model_name = os.path.basename(f_model_config).split('.')[0]
-opt_name = os.path.basename(f_opt_config).split('.')[0]
 
-timestamp = '{:%Y-%m-%d}'.format(datetime.datetime.now())
-if arguments['--prefix']:
-    exp_name = '%s:%s-X-%s-X-%s-%s' % (arguments['<p>'], model_name, opt_name, data_name, timestamp)
-else:
-    exp_name = '%s-X-%s-X-%s-%s' % (model_name, opt_name, data_name, timestamp)
 print ('\n\n\n\n>>>>>>>>> [Experiment Name]')
 print (exp_name)
 print ('<<<<<<<<<\n\n\n\n')
@@ -197,6 +207,12 @@ model = eval(model_config['name'])(**model_config['kwargs'])
 ## Optimizer
 opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
 
+if arguments['-r']:
+    model.load('./saves/%s/model_%s.t7'%(old_exp_name,arguments['<idx>']))
+    opt.load_state_dict(torch.load('./saves/%s/opt_%s.t7'%(old_exp_name,arguments['<idx>'])))
+
+    if arguments['--test']:
+        raise NotImplementedError()
 
 ## tensorboard
 #ph

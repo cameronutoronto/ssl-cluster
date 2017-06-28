@@ -23,6 +23,17 @@ class cnn_base(model):
         tmp = tmp.view(-1,self.fc_dim)
         return self.fc(tmp)
 
+    def save(self, name):
+        dic = {}
+        dic['conv'] = self.conv.state_dict()
+        dic['fc'] = self.fc.state_dict()
+        torch.save(dic, name)
+
+    def load(self, name):
+        dic = torch.load(name)
+        self.conv.load_state_dict(dic['conv'])
+        self.fc.load_state_dict(dic['fc'])
+
 class cnn(cnn_base):
     """docstring for fc"""
     def __init__(self, Hn, input_dim=[28,28,1],output_dim=10):
@@ -335,3 +346,11 @@ class cnn_dngo(cnn_base):
         return list(self.conv.parameters())
     def zero_grad(self):
         self.conv.zero_grad()
+    def save(self, name):
+        dic = {}
+        dic['conv'] = self.conv.state_dict()
+        torch.save(dic, name)
+
+    def load(self, name):
+        dic = torch.load(name)
+        self.conv.load_state_dict(dic['conv'])

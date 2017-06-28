@@ -32,3 +32,11 @@ class fc(model):
         self.model.eval()
     def train(self):
         self.model.train()
+    def save(self, name):
+        dic = {}
+        dic['model'] = self.model.state_dict()
+        torch.save(dic, name)
+
+    def load(self, name):
+        dic = torch.load(name)
+        self.model.load_state_dict(dic['model'])

@@ -57,7 +57,7 @@ data_name = os.path.basename(f_data_config).split('.')[0]
 model_name = os.path.basename(f_model_config).split('.')[0]
 opt_name = os.path.basename(f_opt_config).split('.')[0]
 
-timestamp = '{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now())
+timestamp = '{:%Y-%m-%d}'.format(datetime.datetime.now())
 if arguments['--prefix']:
     exp_name = '%s:%s-X-%s-X-%s-%s' % (arguments['<p>'], model_name, opt_name, data_name, timestamp)
 else:
@@ -299,6 +299,13 @@ for idx in tqdm(xrange(opt_config['max_train_iters'])):
         acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy})
         val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
         model.train()
+    ## checkpoint
+    if idx>0 and idx%5==0:
+        name = './saves/%s/model_%i.t7'%(exp_name,idx)
+        print ("[Saving to]")
+        print (name)
+        model.save(name)
+        torch.save(opt.state_dict(), './saves/%s/opt_%i.t7'%(exp_name,idx))
 
 
 

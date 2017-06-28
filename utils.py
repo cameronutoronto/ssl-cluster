@@ -23,6 +23,7 @@ class MiniBatcher(object):
 			if self.labelled_idxs.shape[0]<self.N_labelled:
 				fac = np.ceil(self.N_labelled / self.labelled_idxs.shape[0])
 				self.labelled_idxs = self.labelled_idxs.repeat(fac)
+		self.start_unlabelled = 0
 			
 
 	def next(self):
@@ -62,6 +63,8 @@ class MiniBatcherPerClass(object):
 			fac = np.ceil(self.labels_per_class/min_count)
 			self.idxs_per_class = [np.array(labs).repeat(fac) for labs in self.idxs_per_class]
 		self.start_unlabelled = len(self.idxs_per_class)*self.labels_per_class
+		if self.start_unlabelled == self.batch_size: # completely supervised case..doesn't matter
+			self.start_unlabelled = 0
 
 
 	def next(self):

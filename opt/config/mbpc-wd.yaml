@@ -2,7 +2,7 @@ name: 'optim.SGD'
 kwargs:
   lr: 0.005
   momentum: 0.9
-  weight_decay: 0.1
+  weight_decay: 0.0001
 batcher_name: MiniBatcherPerClass
 batcher_kwargs:
   batch_size: 1000

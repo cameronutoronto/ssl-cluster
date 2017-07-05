@@ -1,6 +1,6 @@
 """train.py
 Usage:
-    train.py <f_data_config> <f_model_config> <f_opt_config> [--prefix <p>] [--ce]
+    train.py <f_data_config> <f_model_config> <f_opt_config> [--prefix <p>] [--ce] [--db]
     train.py -r <exp_name> <idx> [--test]
 
 Arguments:
@@ -65,6 +65,8 @@ else:
         exp_name = '%s:%s-X-%s-X-%s@%s' % (arguments['<p>'], model_name, opt_name, data_name, timestamp)
     else:
         exp_name = '%s-X-%s-X-%s@%s' % (model_name, opt_name, data_name, timestamp)
+    if arguments['--ce']:
+        exp_name = 'CE.' + exp_name
     
 data_config = yaml.load(open(f_data_config, 'rb'))
 model_config = yaml.load(open(f_model_config, 'rb'))
@@ -76,17 +78,32 @@ print ('<<<<<<<<<\n\n\n\n')
 
 
 def load_1_pkl(i):
-    return pkl.load(open('data/cifar10-train-x-%i.p'%i,'rb'))
+    return pkl.load(open('data/ladder-cifar10-train-x-%i.p'%i,'rb')).transpose(0,2,3,1)
+def make_one_hot(train_y):
+    new_y = np.zeros((train_y.shape[0], 10))
+    new_y[np.arange(train_y.shape[0]),train_y[:,0]] = 1
+    return new_y
 def data_cifar10():
     train = []
-    train_y = pkl.load(open('data/cifar10-train-y.p','rb'))
-    test_y = pkl.load(open('data/cifar10-test-y.p','rb'))
-    test_x = pkl.load(open('data/cifar10-test-x.p','rb'))
+    train_y = make_one_hot(pkl.load(open('data/ladder-cifar10-train-y.p','rb')))
+    test_y = make_one_hot(pkl.load(open('data/ladder-cifar10-test-y.p','rb')))
+    test_x = pkl.load(open('data/ladder-cifar10-test-x.p','rb')).transpose(0,2,3,1)
 
     p = Pool(5)
     train_x = p.map(load_1_pkl, [0, 1, 2, 3, 4])
     return np.concatenate(train_x,0), train_y, test_x, test_y
 
+# def load_1_pkl(i):
+#     return pkl.load(open('data/cifar10-train-x-%i.p'%i,'rb'))
+# def data_cifar10():
+#     train = []
+#     train_y = pkl.load(open('data/cifar10-train-y.p','rb'))
+#     test_y = pkl.load(open('data/cifar10-test-y.p','rb'))
+#     test_x = pkl.load(open('data/cifar10-test-x.p','rb'))
+
+#     p = Pool(5)
+#     train_x = p.map(load_1_pkl, [0, 1, 2, 3, 4])
+#     return np.concatenate(train_x,0), train_y, test_x, test_y
 
 
 ## Experiment stuff
@@ -100,10 +117,13 @@ dist = Euclidean()
 
 
 ## Data
-X, Y, X_test, Y_test = eval('data_%s'%(data_config['name']))()
-NUM_VAL=data_config['num_val'] ## TODO: allow for more validation examples, loop over them...
-Y_val = Y_test[:NUM_VAL]
-X_val = X_test[:NUM_VAL]
+X, Y, _, _ = eval('data_%s'%(data_config['name']))()
+# NUM_VAL=data_config['num_val'] ## TODO: allow for more validation examples, loop over them...
+SPLIT = 40000
+Y_val = Y[SPLIT:]
+X_val = X[SPLIT:]
+Y = Y[:SPLIT]
+X = X[:SPLIT]
 
 X = torch.FloatTensor(X)
 X = Variable(X)
@@ -114,7 +134,7 @@ Y = torch.FloatTensor(Y)
 # Given completely labelled training Y, and a function, 
 # prepare Y_semi
 Y_semi = eval(data_config['ssl_config']['fname'])(Y, **data_config['ssl_config']['kwargs'])
-
+torch.save(Y_semi, './saves/%s/Y_semi.t7'%(exp_name))
 
 
 ## Model
@@ -122,6 +142,9 @@ model = eval(model_config['name'])(**model_config['kwargs'])
 
 ## Optimizer
 opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
+# if 'lrsche' in opt_config:
+#     scheduler = eval(opt_config['lrsche']['name'])(opt, **opt_config['lrsche']['kwargs'])
+
 
 if arguments['-r']:
     model.load('./saves/%s/model_%s.t7'%(old_exp_name,arguments['<idx>']))
@@ -168,7 +191,7 @@ opt_config['batcher_kwargs']['Y_semi'] = Y_semi
 batcher = eval(opt_config['batcher_name'])(X.size()[0], **opt_config['batcher_kwargs'])
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
-support_example_indices = support_example_indices[:1000] ##WARNING ... 
+support_example_indices = support_example_indices##WARNING ... 
 support_X = X[torch.LongTensor(support_example_indices)]
 support_Y = Y[torch.LongTensor(support_example_indices)]
 
@@ -178,59 +201,84 @@ if arguments['--ce']:
 else:
     Loss = SSLCluster(dist,support_X,support_Y)
 
-## Algorithm
-for idx in tqdm(xrange(opt_config['max_train_iters'])):
-    idxs = batcher.next()
-    X_batch = X[torch.LongTensor(idxs)]
-    Y_batch = Y_semi[torch.LongTensor(idxs)]
-    ## network
-    tv_F = model.forward(X_batch)
-    F = tv_F.data.clone()
-    ### loss layer
-    ## Given (F, Y_batch), return (loss float, G torch tensor, train_pred numpy array)
-    loss, G, train_pred = Loss.train(F, Y_batch)
 
-    model.zero_grad()
-    tv_F.backward(gradient=G)
-    opt.step()
+if not arguments['--db']:
+    ## Algorithm
+    for idx in tqdm(xrange(opt_config['max_train_iters'])):
+        if 'lrsche' in opt_config and opt_config['lrsche'] != [] and opt_config['lrsche'][0][0] == idx:
+            _, tmp_fac = opt_config['lrsche'].pop(0)
+            sd = opt.state_dict()
+            assert len(sd['param_groups']) ==1
+            sd['param_groups'][0]['lr'] *= tmp_fac
+            opt.load_state_dict(sd)
+
+            
+        idxs = batcher.next(idx)
+        X_batch = X[torch.LongTensor(idxs)]
+        Y_batch = Y_semi[torch.LongTensor(idxs)]
+        ## network
+        tv_F = model.forward(X_batch)
+        F = tv_F.data.clone()
+        ### loss layer
+        ## Given (F, Y_batch), return (loss float, G torch tensor, train_pred numpy array)
+        loss, G, train_pred = Loss.train(F, Y_batch)
+
+        model.zero_grad()
+        tv_F.backward(gradient=G)
+        opt.step()
 
 
-    # TensorBoard
-    #accuracy
-    train_gt = Y[torch.LongTensor(idxs)].numpy().argmax(1)
-    train_accuracy = (train_pred[batcher.start_unlabelled:] == train_gt[batcher.start_unlabelled:]).mean()
+        # TensorBoard
+        #accuracy
+        train_gt = Y[torch.LongTensor(idxs)].numpy().argmax(1)
+        train_accuracy = (train_pred[batcher.start_unlabelled:] == train_gt[batcher.start_unlabelled:]).mean()
 
-    # summarize
-    acc= sess.run(tf_acc, feed_dict={ph_accuracy:train_accuracy})
-    loss = sess.run(tf_loss, feed_dict={ph_loss:loss})
-    tmp_Gnorm = sess.run(tf_Gnorm, feed_dict={ph_Gnorm:G.norm()})
-    tmp = Y_batch.numpy()
-    ylab = tmp[tmp.sum(1)==1].argmax(1)
-    tmp_Ysemi_labs = sess.run(tf_Ysemi_labs, feed_dict={ph_Ysemi_labs:ylab.astype('int32')})
-    tmp_class_min = sess.run(tf_class_min, feed_dict={ph_class_min:np.bincount(tmp[tmp.sum(1)==1].argmax(1)).min()})
-    train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
+        # summarize
+        acc= sess.run(tf_acc, feed_dict={ph_accuracy:train_accuracy})
+        loss = sess.run(tf_loss, feed_dict={ph_loss:loss})
+        tmp_Gnorm = sess.run(tf_Gnorm, feed_dict={ph_Gnorm:G.norm()})
+        tmp = Y_batch.numpy()
+        ylab = tmp[tmp.sum(1)==1].argmax(1)
+        tmp_Ysemi_labs = sess.run(tf_Ysemi_labs, feed_dict={ph_Ysemi_labs:ylab.astype('int32')})
+        tmp_class_min = sess.run(tf_class_min, feed_dict={ph_class_min:np.bincount(tmp[tmp.sum(1)==1].argmax(1)).min()})
+        train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
 
-    #validate
-    if idx>0 and idx%20==0:
-        model.eval()
-        
-        val_pred, non_spectral_val_pred, val_pred_norm = Loss.infer(model, X_val)
-        val_accuracy = np.mean(Y_val.argmax(1) == val_pred)
-        val_accuracy_non_spectral = np.mean(Y_val.argmax(1) == non_spectral_val_pred)
-        val_accuracy_norm = np.mean(Y_val.argmax(1) == val_pred_norm)
-        print (val_accuracy)
-        acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})
-        acc_non_spectral= sess.run(tf_accuracy_non_spectral, feed_dict={ph_accuracy_non_spectral:val_accuracy_non_spectral})
-        acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy_norm})
-        val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
-        model.train()
-    ## checkpoint
-    if idx>0 and idx%50==0:
-        name = './saves/%s/model_%i.t7'%(exp_name,idx)
-        print ("[Saving to]")
-        print (name)
-        model.save(name)
-        torch.save(opt.state_dict(), './saves/%s/opt_%i.t7'%(exp_name,idx))
+        #validate
+        if idx>0 and idx%20==0:
+            def _validate_batch(model, X_val_batch, Y_val_batch, N_support):
+                model.eval()
+                val_pred, non_spectral_val_pred, val_pred_norm = Loss.infer(model, X_val_batch, N_support)
+                val_accuracy = np.mean(Y_val_batch.argmax(1) == val_pred)
+                val_accuracy_non_spectral = np.mean(Y_val_batch.argmax(1) == non_spectral_val_pred)
+                val_accuracy_norm = np.mean(Y_val_batch.argmax(1) == val_pred_norm)
+                model.train()
+                return val_accuracy, val_accuracy_non_spectral, val_accuracy_norm
+            start_valid = batcher.start_unlabelled_train
+            val_batch_size = batcher.batch_size - start_valid ##WARNING: might need another split if we eventually train with very little labels per batch (in the case of #labels annealing)
+            val_batches = Y_val.shape[0] // val_batch_size
+            v1 = []
+            v2 = []
+            v3 = []
+            for vidx in xrange(val_batches):
+                val_accuracy, val_accuracy_non_spectral, val_accuracy_norm = _validate_batch(model, X_val[vidx*val_batch_size:(vidx+1)*val_batch_size], Y_val[vidx*val_batch_size:(vidx+1)*val_batch_size], start_valid)
+                v1.append(val_accuracy)
+                v2.append(val_accuracy_non_spectral)
+                v3.append(val_accuracy_norm)
+            val_accuracy = np.mean(v1)
+            val_accuracy_non_spectral = np.mean(v2)
+            val_accuracy_norm = np.mean(v3)
+            print (val_accuracy)
+            acc= sess.run(tf_acc, feed_dict={ph_accuracy:val_accuracy})
+            acc_non_spectral= sess.run(tf_accuracy_non_spectral, feed_dict={ph_accuracy_non_spectral:val_accuracy_non_spectral})
+            acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy_norm})
+            val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
+        ## checkpoint
+        if idx>0 and idx%100==0:
+            name = './saves/%s/model_%i.t7'%(exp_name,idx)
+            print ("[Saving to]")
+            print (name)
+            model.save(name)
+            torch.save(opt.state_dict(), './saves/%s/opt_%i.t7'%(exp_name,idx))
 
 
 

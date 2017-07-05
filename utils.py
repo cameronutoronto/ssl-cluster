@@ -24,9 +24,9 @@ class MiniBatcher(object):
 				fac = np.ceil(self.N_labelled / self.labelled_idxs.shape[0])
 				self.labelled_idxs = self.labelled_idxs.repeat(fac)
 		self.start_unlabelled = 0
-			
-
-	def next(self):
+		self.start_unlabelled_train = 0
+		
+	def next(self, train_iter):
 		if self.fraction_labelled_per_batch is None:
 			if self.curr_idx+self.batch_size >= self.N:
 				self.curr_idx=0
@@ -43,7 +43,7 @@ class MiniBatcher(object):
 
 
 class MiniBatcherPerClass(object):
-	def __init__(self, N, batch_size=32, Y_semi=None, labels_per_class=None, sample=True):
+	def __init__(self, N, batch_size=32, Y_semi=None, labels_per_class=None, sample=True, schedule=None):
 		self.N = N
 		self.batch_size=batch_size
 		self.labels_per_class = int(labels_per_class)
@@ -62,20 +62,31 @@ class MiniBatcherPerClass(object):
 		if min_count < self.labels_per_class:
 			fac = np.ceil(self.labels_per_class/min_count)
 			self.idxs_per_class = [np.array(labs).repeat(fac) for labs in self.idxs_per_class]
+		self.schedule = schedule
+		self._make_start_unlabelled()
+
+	def _make_start_unlabelled(self):
 		self.start_unlabelled = len(self.idxs_per_class)*self.labels_per_class
+		self.start_unlabelled_train = self.start_unlabelled
 		if self.start_unlabelled == self.batch_size: # completely supervised case..doesn't matter
 			self.start_unlabelled = 0
+		
 
 
-	def next(self):
+	def next(self, train_iter):
+		if self.schedule is not None and train_iter == self.schedule[0][0]: 
+			_, self.labels_per_class = self.schedule.pop(0)
+			self._make_start_unlabelled()
+			if self.schedule==[]:
+				self.schedule=None
 		if self.sample:
 			ret_list = []
 			for labs in self.idxs_per_class:
 				np.random.shuffle(labs)
 				ret_list.append(labs[:self.labels_per_class])
 			np.random.shuffle(self.unlabelled_idxs)
-			ret_list.append(self.unlabelled_idxs[:self.batch_size - self.start_unlabelled])
-			return np.concatenate(ret_list)
+			ret_list.append(self.unlabelled_idxs[:self.batch_size - self.start_unlabelled_train])
+			return np.concatenate(ret_list).astype('int64')
 		else:
 			"""
 			instead of random idxs, loop through them

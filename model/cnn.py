@@ -225,9 +225,7 @@ class cnn_bn_db(cnn_base):
 
 
 class cnn_globe(cnn_base):
-    """architecture of the discriminator of improved gan paper
-        only difference is that I'm not using leakyrelu
-        and they have 'wight norm'....
+    """popular architecture... specifically following ladder net
     """
     def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
         super(cnn_globe, self).__init__()
@@ -239,53 +237,67 @@ class cnn_globe(cnn_base):
         self.conv = torch.nn.Sequential(
             torch.nn.Dropout(.2),
             torch.nn.Conv2d(input_dim[-1], Hn*hid1, 3,padding=1),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.LeakyReLU(.2),
             torch.nn.Conv2d(Hn*hid1, Hn*hid1, 3,padding=1),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid1),
-            torch.nn.Conv2d(Hn*hid1, Hn*hid1,3,stride=2, padding=1),
-            torch.nn.ReLU(),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.Conv2d(Hn*hid1, Hn*hid1,3,padding=1),
             torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.BatchNorm2d(Hn*hid1),
+            #
             torch.nn.Dropout(dropout),
             torch.nn.Conv2d(Hn*hid1, Hn*hid2, 3,padding=1),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.LeakyReLU(.2),
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,stride=2, padding=1),
-            torch.nn.ReLU(),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
             torch.nn.BatchNorm2d(Hn*hid2),
-            torch.nn.Dropout(dropout),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.BatchNorm2d(Hn*hid2),
+            #
+            torch.nn.Dropout(.2),
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=0),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.LeakyReLU(.2),
             ## 1x1 convs on 6x6 images
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 1,padding=0),
-            torch.nn.ReLU(),
             torch.nn.BatchNorm2d(Hn*hid2),
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 1,padding=0),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm2d(Hn*hid2),
-        )
-        self.fc_dim = Hn*hid2
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(self.fc_dim, output_dim),
-            # torch.nn.ReLU(),
-            # torch.nn.BatchNorm1d(hidfc),
-            # torch.nn.Linear(hidfc, output_dim),
-            # torch.nn.Tanh(),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.Conv2d(Hn*hid2, self.output_dim, 1,padding=0),
+            torch.nn.BatchNorm2d(self.output_dim),
+            torch.nn.LeakyReLU(.2),
         )
     def forward(self, input):
         N = input.size()[0]
         input = input.permute(0,3,1,2)
         tmp = self.conv(input)
-        ## (N, fc_dim, 6,6) -> (N, hid2, -1)
-        tmp = tmp.view(N, self.fc_dim, -1)
+        ## (N, output_dim, 6,6) -> (N, , -1)
+        tmp = tmp.view(N, self.output_dim, -1)
         ## average pool across channels
-        tmp = tmp.mean(-1).view(N, self.fc_dim)
-        return self.fc(tmp)
+        tmp = tmp.mean(-1).view(N, self.output_dim)
+        return tmp
+    def eval(self):
+        self.conv.eval()
+    def train(self):
+        self.conv.train()
+    def parameters(self):
+        return list(self.conv.parameters())
+    def zero_grad(self):
+        self.conv.zero_grad()
+    def save(self, name):
+        dic = {}
+        dic['conv'] = self.conv.state_dict()
+        torch.save(dic, name)
+
+    def load(self, name):
+        dic = torch.load(name)
+        self.conv.load_state_dict(dic['conv'])
 
 class cnn_dngo(cnn_base):
     """architecture of the discriminator of improved gan paper

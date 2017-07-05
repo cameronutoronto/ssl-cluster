@@ -19,6 +19,6 @@ def ssl_per_class(Y, labelled_per_class=10):
 	for class_idx in xrange(Y.size()[1]):
 		idxs = idxs_per_class[class_idx]
 		np.random.shuffle(idxs)
-		for idx in xrange(labelled_per_class):
+		for idx in xrange(len(idxs)-labelled_per_class):
 			Y_semi[idxs[idx]] = torch.ones(Y.size()[1])
 	return Y_semi

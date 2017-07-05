@@ -24,7 +24,10 @@ class SSLCluster(object):
         train_pred = H.numpy().argmax(1)
         return loss, G, train_pred
 
-    def infer(self, model, X_val):
+    def infer(self, model, X_val, N_support):
+        inds = np.arange(len(self.support_X))
+        np.random.shuffle(inds)
+        inds = inds[:N_support]
         val_pred, non_spectral_val_pred = get_pred_join_SVD(model, self.support_X, self.support_Y, X_val, get_non_spectral=True)
         val_pred_norm,_ = get_pred_join_SVD(model, self.support_X, self.support_Y, X_val, normalize=True)
         return val_pred, non_spectral_val_pred, val_pred_norm
@@ -48,7 +51,7 @@ class CE(object):
         train_pred = py_x.data.numpy().argmax(1)
         return loss.data[0], G, train_pred
 
-    def infer(self, model, X_val):
+    def infer(self, model, X_val, N_support):
         py_x = self.lsoftmax(model.forward(Variable(torch.FloatTensor(X_val))))
         val_pred = py_x.data.numpy().argmax(1)
         return val_pred, val_pred, val_pred

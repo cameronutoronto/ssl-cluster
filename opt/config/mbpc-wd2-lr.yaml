@@ -6,7 +6,6 @@ kwargs:
 batcher_name: MiniBatcherPerClass
 batcher_kwargs:
   batch_size: 1000
-  labels_per_class: 100
-  schedule: [[500, 50], [3000, 30]]
-max_train_iters: 20000
-lrsche: [[1000, .1],[3000, .1]]
+  labels_per_class: 50
+max_train_iters: 30000
+lrsche: [[6000, .1],[15000, .1]]

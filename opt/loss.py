@@ -27,9 +27,9 @@ class SSLCluster(object):
     def infer(self, model, X_val, N_support):
         inds = np.arange(len(self.support_X))
         np.random.shuffle(inds)
-        inds = inds[:N_support]
-        val_pred, non_spectral_val_pred = get_pred_join_SVD(model, self.support_X, self.support_Y, X_val, get_non_spectral=True)
-        val_pred_norm,_ = get_pred_join_SVD(model, self.support_X, self.support_Y, X_val, normalize=True)
+        inds = torch.cuda.LongTensor(inds[:N_support])
+        val_pred, non_spectral_val_pred = get_pred_join_SVD(model, self.support_X[inds], self.support_Y[inds], X_val, get_non_spectral=True)
+        val_pred_norm,_ = get_pred_join_SVD(model, self.support_X[inds], self.support_Y[inds], X_val, normalize=True)
         return val_pred, non_spectral_val_pred, val_pred_norm
 
 class CE(object):
@@ -52,8 +52,8 @@ class CE(object):
         return loss.data[0], G, train_pred
 
     def infer(self, model, X_val, N_support):
-        py_x = self.lsoftmax(model.forward(Variable(torch.FloatTensor(X_val))))
-        val_pred = py_x.data.numpy().argmax(1)
+        py_x = self.lsoftmax(model.forward(X_val))
+        val_pred = py_x.data.cpu().numpy().argmax(1)
         return val_pred, val_pred, val_pred
         
 # ##TODO: replace C_hat with F for faster computation
@@ -71,7 +71,7 @@ def solve_kmeans_to_predict(support_U, support_Y, val_U):
     #compute distance
     Z_aug = support_Z[None].repeat(val_U.size()[0], 1,1)
     U_aug = val_U[:,None].repeat(1,support_Z.size()[0],1)
-    val_pred = torch.pow(Z_aug- U_aug,2).numpy().sum(-1).argmin(-1)
+    val_pred = torch.pow(Z_aug- U_aug,2).cpu().numpy().sum(-1).argmin(-1)
     return val_pred
 
 def get_pred_join_SVD(model, support_X, support_Y, X_val, normalize=False, get_non_spectral=False):
@@ -80,7 +80,7 @@ def get_pred_join_SVD(model, support_X, support_Y, X_val, normalize=False, get_n
     perform SVD, using support_X to compute centroid in U, 
     do assignment for X_val
     """
-    joint_X = torch.cat((support_X, Variable(torch.FloatTensor(X_val))), 0)
+    joint_X = torch.cat((support_X, X_val), 0)
     if normalize:
         joint_X = _center_normalize(joint_X)
 

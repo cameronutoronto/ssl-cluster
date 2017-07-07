@@ -12,11 +12,15 @@ Example:
 
 Options:
 """
-
+from __future__ import division
 from docopt import docopt
 import yaml
 import torch
 import tensorflow as tf
+config = tf.ConfigProto(
+        device_count = {'GPU': 0}
+    )
+# sess = tf.Session(config=config)
 from torch import optim
 import numpy as np
 import seaborn as sns
@@ -120,8 +124,8 @@ dist = Euclidean()
 X, Y, _, _ = eval('data_%s'%(data_config['name']))()
 # NUM_VAL=data_config['num_val'] ## TODO: allow for more validation examples, loop over them...
 SPLIT = 40000
-Y_val = Y[SPLIT:]
-X_val = X[SPLIT:]
+Y_val = Y[SPLIT:SPLIT+5000]
+X_val = X[SPLIT:SPLIT+5000]
 Y = Y[:SPLIT]
 X = X[:SPLIT]
 
@@ -139,7 +143,7 @@ torch.save(Y_semi, './saves/%s/Y_semi.t7'%(exp_name))
 
 ## Model
 model = eval(model_config['name'])(**model_config['kwargs'])
-
+model.type(torch.cuda.FloatTensor)
 ## Optimizer
 opt = eval(opt_config['name'])(model.parameters(), **opt_config['kwargs'])
 # if 'lrsche' in opt_config:
@@ -173,14 +177,13 @@ tf_Gnorm = tf.summary.scalar('G_norm', ph_Gnorm)
 tf_Ysemi_labs = tf.summary.histogram('Ysemi_labs', ph_Ysemi_labs)
 tf_class_min = tf.summary.scalar('class_min_count', ph_class_min)
 
-tf_summary = tf.summary.merge_all()
 log_folder = os.path.join('./logs', exp_name)
 # remove existing log folder for the same model.
 if os.path.exists(log_folder):
     import shutil
     shutil.rmtree(log_folder, ignore_errors=True)
 
-sess = tf.InteractiveSession()   
+sess = tf.InteractiveSession(config=config)   
 
 train_writer = tf.summary.FileWriter(
     os.path.join(log_folder, 'train'), sess.graph)
@@ -192,8 +195,8 @@ batcher = eval(opt_config['batcher_name'])(X.size()[0], **opt_config['batcher_kw
 
 support_example_indices = np.nonzero(Y_semi.numpy().sum(1)==1)[0]
 support_example_indices = support_example_indices##WARNING ... 
-support_X = X[torch.LongTensor(support_example_indices)]
-support_Y = Y[torch.LongTensor(support_example_indices)]
+support_X = X[torch.LongTensor(support_example_indices)].type(torch.cuda.FloatTensor)
+support_Y = Y[torch.LongTensor(support_example_indices)].type(torch.cuda.FloatTensor)
 
 ## Loss
 if arguments['--ce']:
@@ -214,17 +217,16 @@ if not arguments['--db']:
 
             
         idxs = batcher.next(idx)
-        X_batch = X[torch.LongTensor(idxs)]
-        Y_batch = Y_semi[torch.LongTensor(idxs)]
+        X_batch = X[torch.LongTensor(idxs)].type(torch.cuda.FloatTensor)
+        Y_batch = Y_semi[torch.LongTensor(idxs)]#.type(torch.cuda.FloatTensor)
         ## network
         tv_F = model.forward(X_batch)
-        F = tv_F.data.clone()
+        F = tv_F.data.clone().type(torch.FloatTensor)
         ### loss layer
-        ## Given (F, Y_batch), return (loss float, G torch tensor, train_pred numpy array)
         loss, G, train_pred = Loss.train(F, Y_batch)
 
         model.zero_grad()
-        tv_F.backward(gradient=G)
+        tv_F.backward(gradient=G.type(torch.cuda.FloatTensor))
         opt.step()
 
 
@@ -244,16 +246,20 @@ if not arguments['--db']:
         train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
 
         #validate
-        if idx>0 and idx%20==0:
+        if idx>0 and idx%50==0:
             def _validate_batch(model, X_val_batch, Y_val_batch, N_support):
                 model.eval()
-                val_pred, non_spectral_val_pred, val_pred_norm = Loss.infer(model, X_val_batch, N_support)
+                val_pred, non_spectral_val_pred, val_pred_norm = Loss.infer(model, Variable(torch.FloatTensor(X_val_batch)).type(torch.cuda.FloatTensor), N_support)
                 val_accuracy = np.mean(Y_val_batch.argmax(1) == val_pred)
                 val_accuracy_non_spectral = np.mean(Y_val_batch.argmax(1) == non_spectral_val_pred)
                 val_accuracy_norm = np.mean(Y_val_batch.argmax(1) == val_pred_norm)
                 model.train()
                 return val_accuracy, val_accuracy_non_spectral, val_accuracy_norm
-            start_valid = batcher.start_unlabelled_train
+            start_valid = batcher.start_unlabelled
+            if start_valid == 0:
+                start_valid = batcher.batch_size //2
+            # WARNING: fixed size 50/50
+            start_valid = batcher.batch_size //2
             val_batch_size = batcher.batch_size - start_valid ##WARNING: might need another split if we eventually train with very little labels per batch (in the case of #labels annealing)
             val_batches = Y_val.shape[0] // val_batch_size
             v1 = []

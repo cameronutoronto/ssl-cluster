@@ -25,7 +25,7 @@ class MiniBatcher(object):
 				self.labelled_idxs = self.labelled_idxs.repeat(fac)
 		self.start_unlabelled = 0
 		self.start_unlabelled_train = 0
-		
+
 	def next(self, train_iter):
 		if self.fraction_labelled_per_batch is None:
 			if self.curr_idx+self.batch_size >= self.N:
@@ -68,7 +68,7 @@ class MiniBatcherPerClass(object):
 	def _make_start_unlabelled(self):
 		self.start_unlabelled = len(self.idxs_per_class)*self.labels_per_class
 		self.start_unlabelled_train = self.start_unlabelled
-		if self.start_unlabelled == self.batch_size: # completely supervised case..doesn't matter
+		if self.start_unlabelled == self.batch_size: # completely supervised case..
 			self.start_unlabelled = 0
 		
 

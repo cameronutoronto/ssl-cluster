@@ -245,7 +245,7 @@ class cnn_globe(cnn_base):
             torch.nn.Conv2d(Hn*hid1, Hn*hid1,3,padding=1),
             torch.nn.BatchNorm2d(Hn*hid1),
             torch.nn.LeakyReLU(.2),
-            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.MaxPool2d((2,2),stride=2),
             torch.nn.BatchNorm2d(Hn*hid1),
             #
             torch.nn.Dropout(dropout),
@@ -258,10 +258,10 @@ class cnn_globe(cnn_base):
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
             torch.nn.BatchNorm2d(Hn*hid2),
             torch.nn.LeakyReLU(.2),
-            torch.nn.MaxPool2d((3,3),stride=2),
+            torch.nn.MaxPool2d((2,2),stride=2),
             torch.nn.BatchNorm2d(Hn*hid2),
             #
-            torch.nn.Dropout(.2),
+            torch.nn.Dropout(dropout), # was 0.3 before when hitting baseline
             torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=0),
             torch.nn.BatchNorm2d(Hn*hid2),
             torch.nn.LeakyReLU(.2),
@@ -298,6 +298,8 @@ class cnn_globe(cnn_base):
     def load(self, name):
         dic = torch.load(name)
         self.conv.load_state_dict(dic['conv'])
+    def type(self, dtype):
+        self.conv.type(dtype)
 
 class cnn_dngo(cnn_base):
     """architecture of the discriminator of improved gan paper

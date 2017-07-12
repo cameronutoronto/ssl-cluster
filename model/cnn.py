@@ -229,47 +229,47 @@ class cnn_globe(cnn_base):
     """
     def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
         super(cnn_globe, self).__init__()
-        hid1=96
-        hid2=192
+        hid1=int(96*Hn)
+        hid2=int(192*Hn)
         hidfc=128
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.conv = torch.nn.Sequential(
             torch.nn.Dropout(.2),
-            torch.nn.Conv2d(input_dim[-1], Hn*hid1, 3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.Conv2d(input_dim[-1], hid1, 3,padding=1),
+            torch.nn.BatchNorm2d(hid1),
             torch.nn.LeakyReLU(.2),
-            torch.nn.Conv2d(Hn*hid1, Hn*hid1, 3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.Conv2d(hid1, hid1, 3,padding=1),
+            torch.nn.BatchNorm2d(hid1),
             torch.nn.LeakyReLU(.2),
-            torch.nn.Conv2d(Hn*hid1, Hn*hid1,3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.Conv2d(hid1, hid1,3,padding=1),
+            torch.nn.BatchNorm2d(hid1),
             torch.nn.LeakyReLU(.2),
             torch.nn.MaxPool2d((2,2),stride=2),
-            torch.nn.BatchNorm2d(Hn*hid1),
+            torch.nn.BatchNorm2d(hid1),
             #
             torch.nn.Dropout(dropout),
-            torch.nn.Conv2d(Hn*hid1, Hn*hid2, 3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(hid1, hid2, 3,padding=1),
+            torch.nn.BatchNorm2d(hid2),
             torch.nn.LeakyReLU(.2),
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(hid2, hid2, 3,padding=1),
+            torch.nn.BatchNorm2d(hid2),
             torch.nn.LeakyReLU(.2),
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=1),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(hid2, hid2, 3,padding=1),
+            torch.nn.BatchNorm2d(hid2),
             torch.nn.LeakyReLU(.2),
             torch.nn.MaxPool2d((2,2),stride=2),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.BatchNorm2d(hid2),
             #
-            torch.nn.Dropout(dropout), # was 0.3 before when hitting baseline
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 3,padding=0),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Dropout(.3), # was 0.3 before when hitting baseline
+            torch.nn.Conv2d(hid2, hid2, 3,padding=0),
+            torch.nn.BatchNorm2d(hid2),
             torch.nn.LeakyReLU(.2),
             ## 1x1 convs on 6x6 images
-            torch.nn.Conv2d(Hn*hid2, Hn*hid2, 1,padding=0),
-            torch.nn.BatchNorm2d(Hn*hid2),
+            torch.nn.Conv2d(hid2, hid2, 1,padding=0),
+            torch.nn.BatchNorm2d(hid2),
             torch.nn.LeakyReLU(.2),
-            torch.nn.Conv2d(Hn*hid2, self.output_dim, 1,padding=0),
+            torch.nn.Conv2d(hid2, self.output_dim, 1,padding=0),
             torch.nn.BatchNorm2d(self.output_dim),
             torch.nn.LeakyReLU(.2),
         )

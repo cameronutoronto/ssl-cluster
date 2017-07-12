@@ -43,7 +43,8 @@ class MiniBatcher(object):
 
 
 class MiniBatcherPerClass(object):
-	def __init__(self, N, batch_size=32, Y_semi=None, labels_per_class=None, sample=True, schedule=None):
+	def __init__(self, N, batch_size=32, Y_semi=None, labels_per_class=None, sample=True, schedule=None, use_sup=None):
+		self.use_sup = use_sup
 		self.N = N
 		self.batch_size=batch_size
 		self.labels_per_class = int(labels_per_class)
@@ -81,11 +82,19 @@ class MiniBatcherPerClass(object):
 				self.schedule=None
 		if self.sample:
 			ret_list = []
+			flag = False
+			if self.use_sup is not None and self.use_sup>0:
+				if np.random.rand() < self.use_sup:
+					flag = True
+					old_lpc = self.labels_per_class
+					self.labels_per_class = int(self.batch_size // len(self.idxs_per_class))
 			for labs in self.idxs_per_class:
 				np.random.shuffle(labs)
 				ret_list.append(labs[:self.labels_per_class])
 			np.random.shuffle(self.unlabelled_idxs)
-			ret_list.append(self.unlabelled_idxs[:self.batch_size - self.start_unlabelled_train])
+			ret_list.append(self.unlabelled_idxs[:self.batch_size - (len(self.idxs_per_class)*self.labels_per_class)])
+			if flag:
+				self.labels_per_class = old_lpc
 			return np.concatenate(ret_list).astype('int64')
 		else:
 			"""

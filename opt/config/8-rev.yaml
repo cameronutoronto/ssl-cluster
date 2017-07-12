@@ -1,0 +1,12 @@
+name: 'optim.SGD'
+kwargs:
+  lr: 0.05
+  momentum: 0.99
+  weight_decay: 0.00
+batcher_name: MiniBatcherPerClass
+batcher_kwargs:
+  batch_size: 1000
+  labels_per_class: 30
+  schedule: [[1000, 50], [3000, 80]]
+max_train_iters: 20000
+lrsche: [[1000, .1],[5000, .1],[10000, .1]]

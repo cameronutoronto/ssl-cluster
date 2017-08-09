@@ -1,0 +1,12 @@
+disc: 
+  name: dcgan_disc
+  kwargs:
+    Hn: 32
+    input_dim: [32,32,3]
+    output_dim: 2
+gen: 
+  name: dcgan
+  kwargs: 
+    nz: 50
+    ngf: 32
+  

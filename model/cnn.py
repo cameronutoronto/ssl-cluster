@@ -33,6 +33,9 @@ class cnn_base(model):
         dic = torch.load(name)
         self.conv.load_state_dict(dic['conv'])
         self.fc.load_state_dict(dic['fc'])
+    def type(self, dtype):
+        self.conv.type(dtype)
+        self.fc.type(dtype)
 
 class cnn(cnn_base):
     """docstring for fc"""
@@ -62,7 +65,35 @@ class cnn(cnn_base):
             torch.nn.Linear(Hn, output_dim),
         )
 
+class dcgan_disc(cnn_base):
+    """docstring for fc"""
+    def __init__(self, Hn, input_dim=[28,28,1],output_dim=10):
+        super(dcgan_disc, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.conv = torch.nn.Sequential(
+            torch.nn.Conv2d(input_dim[-1], Hn, 4,2,padding=1),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.BatchNorm2d(Hn),
+            torch.nn.Conv2d(Hn, Hn*2, 4,2,padding=1),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.BatchNorm2d(Hn*2),
+            torch.nn.Conv2d(Hn*2, Hn*4, 4,2,padding=1),
+            torch.nn.LeakyReLU(.2),
+            torch.nn.BatchNorm2d(Hn*4),
+            torch.nn.Conv2d(Hn*4, 2, 4,1,padding=0),
+            torch.nn.LeakyReLU(.2),
+        )
+        # D = input_dim[0]
+        # for _ in xrange(4):
+        #     D = D//2
 
+        self.fc_dim = 2
+        self.fc = torch.nn.Sequential(
+            # torch.nn.Linear(self.fc_dim, Hn),
+            # torch.nn.LeakyReLU(.2),
+            torch.nn.Linear(self.fc_dim, output_dim),
+        )
     
     
     
@@ -227,11 +258,12 @@ class cnn_bn_db(cnn_base):
 class cnn_globe(cnn_base):
     """popular architecture... specifically following ladder net
     """
-    def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2):
+    def __init__(self, Hn=1, input_dim=[28,28,1],output_dim=10, dropout=0.2, softmax=False):
         super(cnn_globe, self).__init__()
         hid1=int(96*Hn)
         hid2=int(192*Hn)
         hidfc=128
+        self.softmax = softmax
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.conv = torch.nn.Sequential(

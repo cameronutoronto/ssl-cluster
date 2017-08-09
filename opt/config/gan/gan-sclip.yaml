@@ -1,0 +1,12 @@
+name: 'optim.Adam'
+kwargs:
+  lr: 0.0002
+  betas: [.5,0.999]
+batcher_name: MiniBatcherPerClass
+batcher_kwargs:
+  batch_size: 100
+  labels_per_class: 1
+max_train_iters: 200000
+lrsche: [[100000, .1],[200000, .1]]
+disc_clamp: 0.1
+disc_iters: 5

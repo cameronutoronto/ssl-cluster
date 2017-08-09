@@ -1,0 +1,15 @@
+name: 'optim.SGD'
+kwargs:
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 0.0001
+batcher_name: MiniBatcherPerClass
+batcher_kwargs:
+  batch_size: 1000
+  labels_per_class: 70
+max_train_iters: 20000
+lrsche: [[1000, .1],[2000, .1],[3000, .1]]
+loss:
+  name: 'SSLCluster'
+  kwargs: 
+    solve_H_iters: 1

@@ -23,9 +23,9 @@ config = tf.ConfigProto(
 # sess = tf.Session(config=config)
 from torch import optim
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-plt.rcParams['figure.figsize']=(10,10)
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+# plt.rcParams['figure.figsize']=(10,10)
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 from tqdm import tqdm
@@ -35,7 +35,7 @@ import numpy as np
 from metric import Euclidean
 from cleverhans.utils_mnist import data_mnist
 from utils import MiniBatcher, MiniBatcherPerClass
-
+import torchvision.models as tvm
 import datetime
 from opt.loss import *
 from model.fc import fc
@@ -119,7 +119,9 @@ def main(arguments):
 
 
     ## Data
-    if 'fromfile' in data_config:
+    if 'fromfile' in arguments:
+        X, Y, X_val, Y_val = torch.load(arguments['fromfile'])
+    elif 'fromfile' in data_config:
         X, Y, X_val, Y_val = torch.load(data_config['fromfile'])
     else:
         if 'data_%s'%(data_config['name']) == 'data_cifar10':
@@ -211,7 +213,7 @@ def main(arguments):
         else:
             Loss = SSLCluster(dist,support_X,support_Y)
     best_val_acc = 0
-
+    val_errors = []
     if not arguments['--db']:
         ## Algorithm
         for idx in tqdm(xrange(opt_config['max_train_iters'])):
@@ -253,7 +255,7 @@ def main(arguments):
             train_writer.add_summary(acc+loss+tmp_Gnorm+tmp_Ysemi_labs+tmp_class_min, idx)
 
             #validate
-            if idx>0 and idx%50==0:
+            if idx>0 and idx%200==0:
                 def _validate_batch(model, X_val_batch, Y_val_batch, N_support):
                     model.eval()
                     val_pred, non_spectral_val_pred, val_pred_norm = Loss.infer(model, Variable(torch.FloatTensor(X_val_batch)).type(torch.cuda.FloatTensor), N_support)
@@ -285,6 +287,7 @@ def main(arguments):
                 acc_non_spectral= sess.run(tf_accuracy_non_spectral, feed_dict={ph_accuracy_non_spectral:val_accuracy_non_spectral})
                 acc_norm= sess.run(tf_accuracy_norm, feed_dict={ph_accuracy_norm:val_accuracy_norm})
                 val_writer.add_summary(acc+acc_norm+acc_non_spectral, idx)
+                val_errors.append(val_accuracy)
                 if val_accuracy > best_val_acc:
                     best_val_acc = val_accuracy
                     name = './saves/%s/model_best.t7'%(exp_name)
@@ -292,12 +295,13 @@ def main(arguments):
                     print (name)
                     model.save(name)
             ## checkpoint
-            if idx>0 and idx%100==0:
+            if idx>0 and idx%1000==0:
                 name = './saves/%s/model_%i.t7'%(exp_name,idx)
                 print ("[Saving to]")
                 print (name)
                 model.save(name)
                 torch.save(opt.state_dict(), './saves/%s/opt_%i.t7'%(exp_name,idx))
+    pkl.dump(val_errors, open(os.path.join(log_folder, 'val.log'), 'wb'))
     return best_val_acc
 
 

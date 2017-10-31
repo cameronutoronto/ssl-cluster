@@ -1,7 +1,36 @@
 
 from base import model
 import torch 
+import torchvision.models as tvm
 
+class ResNet(model):
+    def __init__(self, suffix=18):
+        super(ResNet, self).__init__()
+        self.model = eval('tvm.resnet%g'%suffix)()
+    def eval(self):
+        self.model.eval()
+        
+    def train(self):
+        self.model.train()
+    def parameters(self):
+        return list(self.model.parameters())
+    def zero_grad(self):
+        self.model.zero_grad()
+    def forward(self, input):
+        input = input.permute(0,3,1,2)
+        tmp = self.model(input)
+        return tmp
+
+    def save(self, name):
+        dic = {}
+        dic['model'] = self.model.state_dict()
+        torch.save(dic, name)
+
+    def load(self, name):
+        dic = torch.load(name)
+        self.model.load_state_dict(dic['model'])
+    def type(self, dtype):
+        self.model.type(dtype)
 
 class cnn_base(model):
     def __init__(self):

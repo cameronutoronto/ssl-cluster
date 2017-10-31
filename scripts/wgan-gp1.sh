@@ -1,0 +1,9 @@
+python train.py data/config/wgan-gp/110000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/120000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/130000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/140000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/150000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/160000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/170000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/180000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed
+python train.py data/config/wgan-gp/190000.yaml model/config/cnn-globe-large.yaml opt/config/sl-128-lr.yaml --ce --prefix wgan-fixed

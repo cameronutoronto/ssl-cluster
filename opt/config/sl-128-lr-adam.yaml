@@ -1,0 +1,9 @@
+name: 'optim.Adam'
+kwargs:
+  lr: 0.05
+  weight_decay: 0.000
+batcher_name: MiniBatcher
+batcher_kwargs:
+  batch_size: 128
+max_train_iters: 10000
+lrsche: [[3000, .1],[7000, .1]]

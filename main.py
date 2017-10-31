@@ -58,17 +58,15 @@ def grad_F(F, H):
     return torch.mm(torch.mm(F,torch.mm(inv_F,H)) - H,torch.mm(inv_H(H),inv_F.t()))
 
 def grad_F_episilon(F, H):
-    inv_F = inverse(F)
-    eyeD = torch.eye(F.size()[0])
     B = torch.diag(H.sum(1)[...,0])
+    BF = torch.mm(B,F)
+    inv_BF = inverse(BF)
+    eyeD = torch.eye(F.size()[0])
     inv_B = torch.diag(1./H.sum(1)[...,0])
     vinv_H = inv_H(H, p_norm=2)
-    return torch.mm(
-            torch.mm(
-                    torch.mm(F, inv_F) - eyeD,
-                    torch.mm(B,torch.mm(H,torch.mm(vinv_H, inv_B)))
-                    +torch.mm(inv_B,torch.mm(H,torch.mm(vinv_H, B)))),
-                      inv_F.t())
+    return torch.mm(torch.mm(B,torch.mm(torch.mm(BF, inv_BF) - eyeD,torch.mm(H,vinv_H))),inv_BF.t())
+
+
 if __name__ == '__main__':
     n = 100
     d = 20

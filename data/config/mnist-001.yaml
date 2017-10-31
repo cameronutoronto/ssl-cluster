@@ -1,0 +1,7 @@
+name: mnist
+num_val: 1000
+
+ssl_config:
+  fname: ssl_basic
+  kwargs:
+    fraction_labelled: 0.01

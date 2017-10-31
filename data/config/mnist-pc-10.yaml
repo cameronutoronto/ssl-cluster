@@ -1,0 +1,7 @@
+name: mnist
+num_val: 1000
+
+ssl_config:
+  fname: ssl_per_class
+  kwargs:
+    labelled_per_class: 10

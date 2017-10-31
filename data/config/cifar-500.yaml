@@ -1,0 +1,8 @@
+fromfile: 'gen-data/real-500.t7'
+name: cifar10
+num_val: 1000
+
+ssl_config:
+  fname: ssl_basic
+  kwargs:
+    fraction_labelled: 1

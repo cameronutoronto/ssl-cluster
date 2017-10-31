@@ -1,6 +1,5 @@
 logs/
 *.t7
-data/
 *.zip
 *.ipynb
 *.pdf
